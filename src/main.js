@@ -2,10 +2,12 @@ import { DataLoader } from './data.js';
 
 // função para criar tabela HTML a partir de dados (array de objetos)
 function createTableWithInnerHTML(data) {
+    // verifica se há dados e cria tabela HTML dinamicamente
     if (!data || data.length === 0) return;
     let tableHTML = '<table border="1"><tr>';
     Object.keys(data[0]).forEach(k => tableHTML += `<th>${k}</th>`);
     tableHTML += '</tr>';
+    // preencher linhas da tabela
     data.forEach(row => {
         tableHTML += '<tr>';
         Object.values(row).forEach(v => tableHTML += `<td>${v}</td>`);
@@ -18,6 +20,7 @@ function createTableWithInnerHTML(data) {
 
 // função para desenhar gráfico de linhas usando D3 a partir dos dados agregados
 function drawChart(data) {
+    // configuração do SVG e margens
     const svg = d3.select("svg");
     const margin = { top: 20, right: 80, bottom: 40, left: 50 };
     const width = +svg.attr("width") - margin.left - margin.right;
@@ -36,7 +39,7 @@ function drawChart(data) {
     const yMax = d3.max(data, d => d.valor) + 0.5;
     const y = d3.scaleLinear().domain([yMin, yMax]).nice().range([height, 0]);
     const color = d3.scaleOrdinal().domain(Array.from(grouped.keys())).range(["#e74c3c","#2c3e50","#1f77b4","#ff7f0e"]);
-
+    // eixos
     g.append("g")
         .attr("transform", `translate(0,${height})`)
         .call(d3.axisBottom(x)
@@ -44,7 +47,7 @@ function drawChart(data) {
     
     g.append("g")
     .call(d3.axisLeft(y));
-
+    // rótulo do eixo Y
     g.append("text")
     .attr("transform", `rotate(-90)`)
     .attr("x", -height / 2)

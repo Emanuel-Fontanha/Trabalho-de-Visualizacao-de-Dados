@@ -9,7 +9,7 @@ export class DataLoader {
 
     // carrega o CSV único (ou vários arquivos) para o FS virtual e cria tabela
     async loadCSV(path = '/data.csv') {
-        if (!this.db || !this.conn) throw new Error('Database not initialized. Call init() first.');
+        if (!this.db || !this.conn) throw new Error('Banco de dados não inicializado. Chame init() primeiro.');
 
         const resp = await fetch(path);
         const buf = new Uint8Array(await resp.arrayBuffer());
@@ -17,14 +17,14 @@ export class DataLoader {
         await this.db.registerFileBuffer('data.csv', buf);
 
         await this.conn.query(`
-        CREATE TABLE ${this.table} AS
-        SELECT * FROM read_csv_auto('data.csv');
-        `);
+            CREATE TABLE ${this.table} AS
+            SELECT * FROM read_csv_auto('data.csv');
+            `);
     }
 
     // função genérica para executar consultas SQL e retornar resultados como array de objetos
     async query(sql) {
-        if (!this.db || !this.conn) throw new Error('Database not initialized. Call init() first.');
+        if (!this.db || !this.conn) throw new Error('Banco de dados não inicializado. Chame init() primeiro.');
         const res = await this.conn.query(sql);
         // segue o padrão do professor: toArray() e converter para JSON
         return res.toArray().map(r => r.toJSON());
