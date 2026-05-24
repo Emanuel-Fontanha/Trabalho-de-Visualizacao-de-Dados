@@ -1,4 +1,4 @@
-d3.csv("data.csv").then(function (data) {
+d3.csv("/data.csv").then(function (data) {
 	// Converter tipos
 	data.forEach((d) => {
 		d.ano = +d.ano;
