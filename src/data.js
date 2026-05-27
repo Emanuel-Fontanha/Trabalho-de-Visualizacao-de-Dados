@@ -9,13 +9,19 @@ export class DataLoader {
 
     // carrega o CSV único (ou vários arquivos) para o FS virtual e cria tabela
     async loadCSV(path = '/data.csv') {
+        // verifica se o banco e a conexão estão prontos
         if (!this.db || !this.conn) throw new Error('Banco de dados não inicializado. Chame init() primeiro.');
 
+        // fetch do arquivo CSV e registra no FS virtual do DuckDB
         const resp = await fetch(path);
+
+        // converte o arquivo para um buffer e registra com uma chave (nome) qualquer
         const buf = new Uint8Array(await resp.arrayBuffer());
+
         // registra com uma chave (nome) qualquer
         await this.db.registerFileBuffer('data.csv', buf);
 
+        // cria a tabela a partir do CSV usando a função read_csv_auto do DuckDB
         await this.conn.query(`
             CREATE TABLE ${this.table} AS
             SELECT * FROM read_csv_auto('data.csv');
@@ -24,9 +30,13 @@ export class DataLoader {
 
     // função genérica para executar consultas SQL e retornar resultados como array de objetos
     async query(sql) {
+        // verifica se o banco e a conexão estão prontos
         if (!this.db || !this.conn) throw new Error('Banco de dados não inicializado. Chame init() primeiro.');
+        
+        // executa a consulta SQL e retorna os resultados
         const res = await this.conn.query(sql);
-        // segue o padrão do professor: toArray() e converter para JSON
+        
+        // utiliza ToArray e ToJSON para converter os resultados em um formato mais fácil de usar (array de objetos)
         return res.toArray().map(r => r.toJSON());
     }
 
