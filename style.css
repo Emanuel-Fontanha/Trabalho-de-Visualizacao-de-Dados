@@ -31,3 +31,25 @@ img {
 svg {
 	background-color: white;
 }
+
+/* Dashboard layout */
+.dashboard {
+	display: grid;
+	grid-template-columns: 2fr 1fr;
+	grid-template-rows: auto 1fr;
+	gap: 20px;
+	margin: 20px;
+}
+.panel {
+	background: white;
+	padding: 12px;
+	border-radius: 8px;
+	box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+}
+#map-panel { grid-column: 1 / 2; grid-row: 1 / 3; }
+#controls-panel { grid-column: 2 / 3; grid-row: 1 / 2; }
+#details-panel { grid-column: 2 / 3; grid-row: 2 / 3; overflow: auto; max-height: 520px; }
+
+#timeline, #histogram { margin-top: 8px; }
+
+.legend { font-size: 12px; }

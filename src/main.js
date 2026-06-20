@@ -1,116 +1,115 @@
-import { DataLoader } from './data.js';
+import { DataLoader, PRICE_BINS } from './data.js';
+import { subscribe, getState, updateFilters, setSelection, clearFilters } from './state.js';
+import { createMap } from './views/map.js';
+import { createTimeline } from './timeline.js';
+import { createHistogram } from './histogram.js';
+import { renderOverview, renderListing } from './details.js';
 
-// função para criar tabela HTML a partir de dados (array de objetos)
-function createTableWithInnerHTML(data) {
-    
-    // verifica se há dados e cria tabela HTML dinamicamente
-    if (!data || data.length === 0) return;
-    
-    // criar cabeçalho da tabela com base nas chaves do primeiro objeto
-    let tableHTML = '<table border="1"><tr>';
-    
-    // usar as chaves do primeiro objeto para criar os cabeçalhos da tabela
-    Object.keys(data[0]).forEach(k => tableHTML += `<th>${k}</th>`);
-    
-    // fechar a linha do cabeçalho
-    tableHTML += '</tr>';
-    
-    // preencher linhas da tabela
-    data.forEach(row => {
-        tableHTML += '<tr>';
-        Object.values(row).forEach(v => tableHTML += `<td>${v}</td>`);
-        tableHTML += '</tr>';
-    });
+const loader = new DataLoader();
 
-    tableHTML += '</table>';
-    
-    // inserir a tabela no div com id "table"
-    const div = document.querySelector("#table");
-    
-    // verificar se o div existe antes de inserir a tabela
-    if (div) div.innerHTML = tableHTML;
+const detailsEl = document.querySelector('#details');
+const statusEl = document.querySelector('#filter-status');
+const loadingEl = document.querySelector('#loading');
+const clearBtn = document.querySelector('#clear-filters');
+
+// --- Views --------------------------------------------------------------
+// Cada view só conhece seu próprio SVG e os callbacks que dispara — toda a
+// coordenação entre elas passa pelo state.js (nenhuma view chama a outra
+// diretamente).
+const mapView = createMap('#map', {
+    onSelect: (d) => setSelection(d.listing_id),
+    onBrush: (bbox) => updateFilters({ bbox }),
+});
+
+const timelineView = createTimeline('#timeline-chart', {
+    onBrush: (range) => updateFilters({ dateRange: range }),
+});
+
+const histogramView = createHistogram('#histogram-chart', {
+    onBarClick: (binLabel) => {
+        const bin = PRICE_BINS.find((b) => b.label === binLabel);
+        if (!bin) return;
+        const max = bin.max === Infinity ? 1e9 : bin.max;
+        const current = getState().filters.priceRange;
+        const isActive = current && current[0] === bin.min && current[1] === max;
+        // clicar de novo na mesma barra remove o filtro (toggle)
+        updateFilters({ priceRange: isActive ? null : [bin.min, max] });
+    },
+});
+
+// Acha o bin ativo (se houver) a partir do filtro de preço corrente, só
+// para destacar a barra correspondente no histograma.
+function activeBinLabel(filters) {
+    if (!filters.priceRange) return null;
+    const [min, max] = filters.priceRange;
+    const bin = PRICE_BINS.find((b) => b.min === min && (b.max === Infinity ? max === 1e9 : b.max === max));
+    return bin ? bin.label : null;
 }
 
-// função para desenhar gráfico de linhas usando D3 a partir dos dados agregados
-function drawChart(data) {
-    
-    // configuração do SVG e margens
-    const svg = d3.select("svg");
-    const margin = { top: 20, right: 80, bottom: 40, left: 50 };
-    const width = +svg.attr("width") - margin.left - margin.right;
-    const height = +svg.attr("height") - margin.top - margin.bottom;
-    
-    // limpar gráfico anterior
-    svg.selectAll("*").remove();
+function formatStatus(summary) {
+    if (!statusEl) return;
+    const n = summary?.n_listings ?? 0;
+    statusEl.textContent = n === 1 ? '1 imóvel no filtro atual' : `${n} imóveis no filtro atual`;
+}
 
-    // criar grupo para o gráfico com margens
-    const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+// --- Re-renderização coordenada ------------------------------------------
+// Toda vez que o estado muda (qualquer filtro ou seleção), refaz as 5
+// consultas relevantes e atualiza as 4 views. Um contador de requisição
+// evita que uma resposta antiga (de uma query lenta) sobrescreva uma mais
+// recente caso o usuário mude o filtro rapidamente (race condition).
+let requestId = 0;
 
-    // garantir tipos numéricos (agregação do DuckDB já deve dar números, mas por segurança)
-    const toNumber = v => (typeof v === 'bigint') ? Number(v) : (v == null ? NaN : +v);
-    
-    // converter os dados para o formato esperado e filtrar valores inválidos
-    data = data.map(d => ({ ano: toNumber(d.ano), tipo: d.tipo, valor: toNumber(d.valor) }))
-            .filter(d => !isNaN(d.ano) && !isNaN(d.valor));
+async function renderAll(state) {
+    const myRequest = ++requestId;
+    const { filters, selection } = state;
 
-    // agrupar por tipo para desenhar linhas separadas
-    const grouped = d3.group(data, d => d.tipo);
-    const x = d3.scaleLinear().domain(d3.extent(data, d => d.ano)).range([0, width]);
-    const yMin = 0;
-    const yMax = d3.max(data, d => d.valor) + 0.5;
-    const y = d3.scaleLinear().domain([yMin, yMax]).nice().range([height, 0]);
-    const color = d3.scaleOrdinal().domain(Array.from(grouped.keys())).range(["#e74c3c","#2c3e50","#1f77b4","#ff7f0e"]);
-    
-    // eixos
-    g.append("g")
-        .attr("transform", `translate(0,${height})`)
-        .call(d3.axisBottom(x)
-        .tickFormat(d3.format("d")));
-    
-    // rótulo do eixo X
-    g.append("g")
-    .call(d3.axisLeft(y));
-    // rótulo do eixo Y
-    g.append("text")
-    .attr("transform", `rotate(-90)`)
-    .attr("x", -height / 2)
-    .attr("y", -margin.left + 15)
-    .attr("text-anchor", "middle")
-    .attr("fill", "#000")
-    .text("% de vendas");
+    const [mapData, histData, timelineData, summary, neighbourhoods] = await Promise.all([
+        loader.listingsForMap(filters),
+        loader.priceHistogram(filters),
+        loader.reviewsTimeSeries(filters),
+        loader.summaryStats(filters),
+        loader.topNeighbourhoods(filters, 5),
+    ]);
 
-    // linha para cada tipo
-    const line = d3.line().x(d => x(d.ano)).y(d => y(d.valor));
+    if (myRequest !== requestId) return; // uma requisição mais nova já chegou; descarta esta
 
-    // iterar sobre cada grupo (tipo) e desenhar a linha correspondente
-    for (const [key, values] of grouped) {
-        values.sort((a,b) => a.ano - b.ano);
-        g.append("path").datum(values).attr("fill","none").attr("stroke",color(key)).attr("stroke-width",2).attr("d",line);
-        const last = values[values.length - 1];
-        g.append("text").attr("x", x(last.ano) + 5).attr("y", y(last.valor)).text(key === "conversation_hearts" ? "Hearts" : key).style("font-size","12px").style("fill",color(key));
+    mapView.update(mapData, selection);
+    timelineView.update(timelineData);
+    histogramView.update(histData, activeBinLabel(filters));
+    formatStatus(summary);
+
+    if (selection) {
+        const listing = await loader.listingDetails(selection);
+        if (myRequest !== requestId) return;
+        renderListing(detailsEl, listing, { onClose: () => setSelection(null) });
+    } else {
+        renderOverview(detailsEl, { summary, neighbourhoods });
     }
 }
 
-// função principal para inicializar o DataLoader, carregar dados, executar consulta e desenhar gráfico
+clearBtn?.addEventListener('click', () => {
+    mapView.clearBrush();
+    timelineView.clearBrush();
+    clearFilters();
+});
+
 async function main() {
-    const loader = new DataLoader();
+    subscribe(renderAll);
+
     await loader.init();
-    await loader.loadCSV('/data.csv'); // data.csv deve estar na pasta public/ para ser acessível via fetch
+    await loader.loadAirbnb();
 
-    // expõe o loader e a função de desenho para depuração no console
+    if (loadingEl) loadingEl.style.display = 'none';
+
+    await renderAll(getState());
+
+    // Exposto para depuração no console (não usado pela UI).
     window.loader = loader;
-    window.drawChart = drawChart;
-
-    // consulta de agregação por ano e tipo (igual ao que precisa para o gráfico)
-    const agg = await loader.aggregatedByYearType();
-    drawChart(agg);
-    console.log(agg);
-
-    // expõe a função de criação de tabela para depuração no console
-    window.createTableWithInnerHTML = createTableWithInnerHTML;
-    
-    createTableWithInnerHTML(agg);
 }
 
-window.onload = main;
-window.drawChart = drawChart;
+window.addEventListener('DOMContentLoaded', () => {
+    main().catch((err) => {
+        console.error(err);
+        if (loadingEl) loadingEl.textContent = 'Erro ao carregar os dados — veja o console.';
+    });
+});

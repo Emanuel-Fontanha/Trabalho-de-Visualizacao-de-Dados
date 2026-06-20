@@ -10,20 +10,22 @@
 
     <body>
 
-        <h1>Reestruturação de Gráficos Inadequados</h1>
+        <h1>Dashboard Interativo — Airbnb (amostra)</h1>
 
-        <div class="container">
-            <!-- Imagem Original -->
-            <div class="box">
-                <h2>Visualização Original</h2>
-                <img src="original.png" alt="Gráfico original">
+        <div class="dashboard">
+            <div class="panel" id="map-panel">
+                <h2>Mapa (Where)</h2>
+                <svg id="map" width="700" height="500"></svg>
             </div>
-            <!-- Imagem Corrigida (dinâmica a partir dos dados/queries) -->
-            <div class="box">
-                <h2>Visualização Corrigida</h2>
-                <svg width="600" height="350"></svg>
+            <div class="panel" id="controls-panel">
+                <h2>Overview & Controls</h2>
+                <div id="timeline"></div>
+                <div id="histogram"></div>
             </div>
-
+            <div class="panel" id="details-panel">
+                <h2>Details on demand</h2>
+                <div id="details"></div>
+            </div>
         </div>
 
         <script src="https://d3js.org/d3.v7.min.js"></script>
