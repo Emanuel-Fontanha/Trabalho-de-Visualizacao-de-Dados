@@ -202,21 +202,18 @@ export function createMap(selector, { onSelect, onBrush } = {}) {
                 .addAll(cellData);
 
             const circles = cell.pointsG.selectAll('circle').data(cellData, (d) => d.listing_id);
-            circles.exit().transition().duration(150).attr('r', 0).remove();
+            circles.exit().remove();
 
             circles
                 .enter()
                 .append('circle')
                 .attr('cx', (d) => cell.x(+d.longitude))
                 .attr('cy', (d) => cell.y(+d.latitude))
-                .attr('r', 0)
                 .attr('fill', (d) => (d.review_scores_rating != null ? color(+d.review_scores_rating) : 'var(--ink-dim)'))
                 .attr('stroke', '#0b2027')
                 .attr('stroke-width', 0.5)
                 .attr('fill-opacity', 0.75)
                 .merge(circles)
-                .transition()
-                .duration(300)
                 .attr('cx', (d) => cell.x(+d.longitude))
                 .attr('cy', (d) => cell.y(+d.latitude))
                 .attr('fill', (d) => (d.review_scores_rating != null ? color(+d.review_scores_rating) : 'var(--ink-dim)'))

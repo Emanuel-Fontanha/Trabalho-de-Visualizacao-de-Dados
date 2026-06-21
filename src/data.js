@@ -45,6 +45,8 @@ export const PRICE_BINS = [
 
 ];
 
+export const MAX_MAP_POINTS_PER_CITY = 1200;
+
 
 // Monta a cláusula WHERE compartilhada por (quase) todas as consultas, a
 
@@ -232,7 +234,7 @@ export class DataLoader {
 
             CREATE OR REPLACE TABLE listings_raw AS
 
-            SELECT * FROM read_csv_auto('Listings.csv', SAMPLE_SIZE=-1);
+            SELECT * FROM read_csv_auto('Listings.csv', ignore_errors=true, SAMPLE_SIZE=-1);
 
         `);
 
@@ -464,13 +466,17 @@ export class DataLoader {
 
         const sql = `
 
-            SELECT listing_id, name, city, neighbourhood, room_type, property_type,
-
-                   latitude, longitude, price, price_usd, review_scores_rating
-
-            FROM listings_clean AS l
-
-            WHERE ${where};
+            WITH filtered AS (
+                SELECT listing_id, name, city, neighbourhood, room_type, property_type, latitude, longitude, price, price_usd, review_scores_rating
+                FROM listings_clean AS l
+                WHERE ${where}
+            )
+            SELECT listing_id, name, city, neighbourhood, room_type, property_type, latitude, longitude, price, price_usd, review_scores_rating
+            FROM (
+                SELECT *, ROW_NUMBER() OVER (PARTITION BY city ORDER BY RANDOM()) AS rn
+                FROM filtered
+            ) AS sampled
+            WHERE rn <= ${MAX_MAP_POINTS_PER_CITY};
 
         `;
 
