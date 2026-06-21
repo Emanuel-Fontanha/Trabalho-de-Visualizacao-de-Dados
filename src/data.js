@@ -194,20 +194,20 @@ export class DataLoader {
         await this.conn.query(`DROP TABLE review_counts;`);
     }
 
-    // Função auxiliar para resolver Mojibake e caracteres truncados
-    fixEncoding(str) {
-        if (!str) return str;
-        let attempt = str;
-
-        while (attempt.length > 0) {
-            try {
-                return decodeURIComponent(escape(attempt));
-            } catch (e) {
-                attempt = attempt.slice(0, -1);
-            }
-        }
-        return str;
-    }
+    // *** REMOVIDO: fixEncoding() ***
+    // Existia uma função aqui que tentava corrigir "mojibake" usando
+    // decodeURIComponent(escape(str)) com fallback de cortar caracteres
+    // até parar de dar erro. O problema: escape()/decodeURIComponent()
+    // assumem Latin-1, não UTF-8 — qualquer string que já estivesse
+    // CORRETAMENTE acentuada em UTF-8 (que é o caso de toda a amostra
+    // gerada para este projeto, conferido diretamente nos CSVs) quebrava
+    // ao passar por essa função: "São Paulo" virava só "S", porque o
+    // primeiro caractere acentuado gerava um erro de "URI malformed", e
+    // o fallback ia cortando o FINAL da string até o erro parar de
+    // acontecer — o que, na prática, descartava quase tudo. Removida
+    // porque (1) os dados já estão corretos em UTF-8 nesta amostra, e
+    // (2) mesmo se não estivessem, essa técnica específica não era seguro
+    // o suficiente para aplicar indiscriminadamente em qualquer string.
 
     // Executa SQL arbitrário e devolve um array de objetos JS simples.
     async query(sql) {
@@ -217,14 +217,10 @@ export class DataLoader {
         return res.toArray().map((row) => {
             const obj = row.toJSON();
             for (const key in obj) {
-                // Corrige os BigInts para o D3
+                // Corrige os BigInts para o D3 (Arrow devolve inteiros de
+                // 64 bits como BigInt; +BigInt lança TypeError em escalas
+                // do D3, então convertemos para Number aqui uma única vez).
                 if (typeof obj[key] === 'bigint') obj[key] = Number(obj[key]);
-
-                // Limpa a sujeira de codificação, MAS ignora colunas criadas
-                // pelo nosso próprio SQL (bin_label e month).
-                if (typeof obj[key] === 'string' && key !== 'bin_label' && key !== 'month') {
-                    obj[key] = this.fixEncoding(obj[key]);
-                }
             }
             return obj;
         });
