@@ -215,8 +215,9 @@ async function updateDetailMap(listing, filters, myRequest) {
         return;
     }
     
-    // Repasse o 'filters' para o banco de dados:
-    const cityPoints = await loader.listingsInCity(listing.city, filters); 
+    // Repasse o 'filters' e garanta que o imóvel selecionado sempre seja
+    // incluído na amostra do mapa de detalhe.
+    const cityPoints = await loader.listingsInCity(listing.city, filters, listing.listing_id);
     
     if (myRequest !== requestId) return;
     const isNewSelection = lastDetailMapListingId !== listing.listing_id;
