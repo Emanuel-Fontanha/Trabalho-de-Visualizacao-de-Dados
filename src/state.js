@@ -3,6 +3,7 @@ const initialFilters = {
     priceRange: null, // [min, max] em USD (ver price_usd em data.js)  -> dimensão "what"
     bbox: null, // {city, bbox:{lonMin, lonMax, latMin, latMax}} -> dimensão "where" (região dentro de 1 cidade)
     dateRange: null, // [isoStart, isoEnd] -> dimensão "when"
+    ratingRange: null, // [min, max] -> dimensão "how" (avaliação média do imóvel)
 };
 
 const state = {
