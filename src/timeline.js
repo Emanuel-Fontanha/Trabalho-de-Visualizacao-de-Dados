@@ -64,6 +64,28 @@ export function createTimeline(selector, { onBrush, onZoomChange } = {}) {
     let zoomDomain = null;   // [minDate, maxDate] do zoom atual, ou null se não há zoom
 
 
+    // *** CORREÇÃO DE BUG: eixo Y travando em "1" depois de um zoom ***
+    // Os dados são agregados por MÊS (1 ponto por mês, sempre no dia 1),
+    // mas zoomDomain vem de x.invert() sobre a posição em pixels do
+    // brush — datas "soltas" como 12 de agosto, não necessariamente o
+    // dia 1 de nenhum mês. Se o usuário arrastasse um intervalo cujos
+    // dois extremos caíssem DENTRO do mesmo mês sem tocar o dia 1 de
+    // nenhum mês incluído (ex.: brush entre 10/ago e 20/ago), o filtro
+    // `d.date >= zoomDomain[0] && d.date <= zoomDomain[1]` não batia em
+    // NENHUM ponto — visibleData ficava vazio, d3.max([]) retornava
+    // undefined, e o fallback "|| 1" travava o eixo Y em [0, 1].
+    //
+    // A correção arredonda o zoomDomain para fronteiras de mês ANTES de
+    // filtrar: floor no início (volta para o dia 1 do mês do início) e
+    // ceil no fim (avança para o dia 1 do mês seguinte ao do fim) — assim
+    // qualquer mês que tenha overlap com o brush, mesmo que parcial, é
+    // sempre incluído. Isso também melhora a UX: o zoom passa a sempre
+    // "encaixar" em meses completos, em vez de cortar visualmente um mês
+    // pela metade.
+    function monthAlignedDomain([start, end]) {
+        return [d3.timeMonth.floor(start), d3.timeMonth.ceil(end)];
+    }
+
     function brushing(event) {
         if (!event.sourceEvent || !event.selection) return;
         const [start, end] = event.selection.map(x.invert);
@@ -78,14 +100,21 @@ export function createTimeline(selector, { onBrush, onZoomChange } = {}) {
             if (onBrush) onBrush(null); // brush limpo -> remove o filtro "when"
             return;
         }
-        const [start, end] = sel.map(x.invert);
-        showPeriodLabel(start, end);
+        const [rawStart, rawEnd] = sel.map(x.invert);
+        showPeriodLabel(rawStart, rawEnd);
 
-        // Filtro "when" (linked views): continua disparando exatamente
-        // como antes — o zoom visual é um efeito ADICIONAL, não um
-        // substituto da filtragem.
-        if (onBrush) onBrush([toISO(start), toISO(end)]);
-        zoomTo([start, end]);
+        // Filtro "when" (linked views): continua usando as datas exatas
+        // do brush (não as arredondadas por mês) — o filtro SQL em
+        // data.js já trabalha em granularidade de dia, então não tem o
+        // mesmo problema de "cair entre dois pontos" que o zoom visual
+        // tinha; arredondar aqui só tornaria o filtro menos preciso do
+        // que o usuário pediu.
+        if (onBrush) onBrush([toISO(rawStart), toISO(rawEnd)]);
+
+        // Zoom visual: usa as datas ARREDONDADAS por mês (ver
+        // monthAlignedDomain acima) — é só esse cálculo que precisava
+        // da correção.
+        zoomTo(monthAlignedDomain([rawStart, rawEnd]));
     }
 
     function showPeriodLabel(start, end) {

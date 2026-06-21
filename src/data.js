@@ -17,8 +17,8 @@ export const PRICE_BINS = [
 ];
 
 // Limite de pontos no mapa para evitar renderização excessiva e lag.
-export const MAX_MAP_POINTS_PER_CITY = 125; // controla o número de pontos por cidade
-export const MAX_DETAIL_MAP_POINTS = 225; // controla a riqueza de detalhes
+export const MAX_MAP_POINTS_PER_CITY = 5000; // controla o número de pontos por cidade
+export const MAX_DETAIL_MAP_POINTS = 2500; // controla a riqueza de detalhes
 
 // Monta a cláusula WHERE compartilhada por (quase) todas as consultas, a
 // partir do objeto de filtros guardado em state.js.
@@ -148,37 +148,33 @@ export class DataLoader {
         `);
     }
 
-    // Função auxiliar para resolver Mojibake e caracteres truncados
-    fixEncoding(str) {
-        if (!str) return str;
-        let attempt = str;
-        
-        while (attempt.length > 0) {
-            try {
-                return decodeURIComponent(escape(attempt));
-            } catch (e) {
-                attempt = attempt.slice(0, -1);
-            }
-        }
-        return str;
-    }
+    // *** REMOVIDO: fixEncoding() ***
+    // Existia uma função aqui que tentava corrigir "mojibake" usando
+    // decodeURIComponent(escape(str)) com fallback de cortar caracteres
+    // até parar de dar erro. O problema: escape()/decodeURIComponent()
+    // assumem Latin-1, não UTF-8 — qualquer string que já estivesse
+    // CORRETAMENTE acentuada em UTF-8 (que é o caso de toda a amostra
+    // gerada para este projeto, conferido diretamente nos CSVs) quebrava
+    // ao passar por essa função: "São Paulo" virava só "S", porque o
+    // primeiro caractere acentuado gerava um erro de "URI malformed", e
+    // o fallback ia cortando o FINAL da string até o erro parar de
+    // acontecer — o que, na prática, descartava quase tudo. Removida
+    // porque (1) os dados já estão corretos em UTF-8 nesta amostra, e
+    // (2) mesmo se não estivessem, essa técnica específica não era seguro
+    // o suficiente para aplicar indiscriminadamente em qualquer string.
 
     // Executa SQL arbitrário e devolve um array de objetos JS simples.
     async query(sql) {
         if (!this.db || !this.conn) throw new Error('Banco não inicializado. Chame init() primeiro.');
         const res = await this.conn.query(sql);
-        
+
         return res.toArray().map((row) => {
             const obj = row.toJSON();
             for (const key in obj) {
-                // Corrige os BigInts para o D3
+                // Corrige os BigInts para o D3 (Arrow devolve inteiros de
+                // 64 bits como BigInt; +BigInt lança TypeError em escalas
+                // do D3, então convertemos para Number aqui uma única vez).
                 if (typeof obj[key] === 'bigint') obj[key] = Number(obj[key]);
-                
-                // Limpa a sujeira de codificação, MAS ignora colunas criadas 
-                // pelo nosso próprio SQL (bin_label e month).
-                if (typeof obj[key] === 'string' && key !== 'bin_label' && key !== 'month') {
-                    obj[key] = this.fixEncoding(obj[key]);
-                }
             }
             return obj;
         });
@@ -286,11 +282,30 @@ export class DataLoader {
         return rows[0] || null;
     }
 
-    // Mapa de detalhe com os listings da MESMA cidade, mas agora
-    // respeitando ativamente os filtros globais aplicados.
+    // Mapa de detalhe com os listings da MESMA cidade, respeitando os
+    // filtros globais ativos — EXCETO para o próprio imóvel selecionado,
+    // que sempre aparece mesmo se estiver fora do filtro atual (ex.: o
+    // usuário aplicou um filtro de preço depois de já ter selecionado um
+    // imóvel fora dessa faixa) — caso contrário o painel de detalhe
+    // "perderia" o imóvel que o usuário está olhando.
+    //
+    // *** CLAREZA DE PRECEDÊNCIA SQL: os parênteses ao redor de cada
+    // bloco abaixo são explícitos de propósito. Sem eles, "A AND B OR C"
+    // ainda seria interpretado como "(A AND B) OR C" pela precedência
+    // padrão de SQL (AND liga mais forte que OR) — ou seja, o
+    // comportamento já seria o mesmo mesmo sem os parênteses. Mas deixar
+    // implícito é uma armadilha de manutenção: qualquer pessoa que
+    // adicionar uma nova condição aqui no futuro, sem prestar atenção à
+    // precedência, pode facilmente introduzir um bug real. ***
     async listingsInCity(city, filters = {}, selectedListingId = null) {
         const baseWhere = buildWhereClause({ ...filters, cities: [city] });
-        const selectedClause = selectedListingId != null ? ` OR l.listing_id = ${Number(selectedListingId)}` : '';
+        const selectedId = selectedListingId != null ? Number(selectedListingId) : null;
+        // o próprio imóvel selecionado entra na amostra mesmo sem
+        // coordenadas válidas (ex.: caso raro de lat/lon nulos) — mas
+        // detailMap.js já filtra `longitude/latitude != null` antes de
+        // desenhar, então isso não quebra o desenho, só evita que a
+        // query e o painel "percam" o imóvel por completo.
+        const selectedClause = selectedId != null ? ` OR l.listing_id = ${selectedId}` : '';
 
         const sql = `
             SELECT listing_id, name, city, neighbourhood, room_type, property_type,
@@ -298,12 +313,14 @@ export class DataLoader {
             FROM (
                 SELECT *, ROW_NUMBER() OVER (ORDER BY random()) AS rn
                 FROM listings_clean AS l
-                WHERE (${baseWhere})
-                  AND l.latitude IS NOT NULL AND l.longitude IS NOT NULL
-                  ${selectedClause}
+                WHERE (
+                    (${baseWhere})
+                    AND l.latitude IS NOT NULL AND l.longitude IS NOT NULL
+                )
+                ${selectedClause}
             ) AS sampled
-            WHERE rn <= ${MAX_DETAIL_MAP_POINTS}
-               OR listing_id = ${selectedListingId != null ? Number(selectedListingId) : 'NULL'};
+            WHERE (rn <= ${MAX_DETAIL_MAP_POINTS})
+               OR (listing_id = ${selectedId != null ? selectedId : 'NULL'});
         `;
         return this.query(sql);
     }
