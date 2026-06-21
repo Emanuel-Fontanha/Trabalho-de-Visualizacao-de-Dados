@@ -16,9 +16,18 @@ export const PRICE_BINS = [
     { min: 700, max: Infinity, label: '700+' },
 ];
 
-// Limite de pontos no mapa para evitar renderização excessiva e lag.
-export const MAX_MAP_POINTS_PER_CITY = 1000; // controla o número de pontos por cidade
-export const MAX_DETAIL_MAP_POINTS = 1000; // controla a riqueza de detalhes
+// Limite de VOLUME DE DADOS: quantos imóveis por cidade ficam no banco
+// depois da carga (decisão original: 3000/cidade, priorizando quem tem
+// mais avaliações). Diferente dos limites de RENDERIZAÇÃO abaixo — este
+// roda uma vez só, no loadAirbnb().
+const DATA_LOAD_CAP_PER_CITY = 3000;
+
+// Limites de RENDERIZAÇÃO: quantos pontos cada mapa desenha por query.
+// MAX_MAP_POINTS_PER_CITY se multiplica pelo nº de cidades visíveis no
+// mapa principal; MAX_DETAIL_MAP_POINTS é total, pois o mapa de detalhe
+// já mostra uma única cidade por vez.
+export const MAX_MAP_POINTS_PER_CITY = 1000;
+export const MAX_DETAIL_MAP_POINTS = 1000;
 
 // Monta a cláusula WHERE compartilhada por (quase) todas as consultas, a
 // partir do objeto de filtros guardado em state.js.
@@ -68,123 +77,128 @@ export class DataLoader {
         this.conn = await this.db.connect();
     }
 
-async loadAirbnb(listingsPath = '/Airbnb Data/Listings.csv', reviewsPath = '/Airbnb Data/Reviews.csv') {
-    if (!this.db || !this.conn) throw new Error('Banco não inicializado. Chame init() primeiro.');
+    async loadAirbnb(listingsPath = '/Airbnb Data/Listings.csv', reviewsPath = '/Airbnb Data/Reviews.csv') {
+        if (!this.db || !this.conn) throw new Error('Banco não inicializado. Chame init() primeiro.');
 
-    const [r1, r2] = await Promise.all([fetch(listingsPath), fetch(reviewsPath)]);
-    if (!r1.ok) throw new Error(`Falha ao buscar ${listingsPath} (${r1.status})`);
-    if (!r2.ok) throw new Error(`Falha ao buscar ${reviewsPath} (${r2.status})`);
+        const [r1, r2] = await Promise.all([fetch(listingsPath), fetch(reviewsPath)]);
+        if (!r1.ok) throw new Error(`Falha ao buscar ${listingsPath} (${r1.status})`);
+        if (!r2.ok) throw new Error(`Falha ao buscar ${reviewsPath} (${r2.status})`);
 
-    const [buf1, buf2] = await Promise.all([r1.arrayBuffer(), r2.arrayBuffer()]);
+        const [buf1, buf2] = await Promise.all([r1.arrayBuffer(), r2.arrayBuffer()]);
 
-    // Os CSVs do Inside Airbnb costumam vir em Windows-1252, não UTF-8
-    // puro. Decodificar aqui evita o erro "Invalid unicode (byte
-    // sequence mismatch)" que o DuckDB lança ao ler os bytes brutos
-    // como UTF-8.    
-    const decoder = new TextDecoder('windows-1252');
-    const text1 = decoder.decode(buf1);
-    const text2 = decoder.decode(buf2);
+        // Os CSVs do Inside Airbnb costumam vir em Windows-1252, não UTF-8
+        // puro. Decodificar aqui evita o erro "Invalid unicode (byte
+        // sequence mismatch)" que o DuckDB lança ao ler os bytes brutos
+        // como UTF-8.
+        const decoder = new TextDecoder('windows-1252');
+        const text1 = decoder.decode(buf1);
+        const text2 = decoder.decode(buf2);
 
-    await this.db.registerFileText('Listings.csv', text1);
-    await this.db.registerFileText('Reviews.csv', text2);
+        await this.db.registerFileText('Listings.csv', text1);
+        await this.db.registerFileText('Reviews.csv', text2);
 
-    await this.conn.query(`
-        CREATE OR REPLACE TABLE listings_raw AS
-        SELECT * FROM read_csv_auto('Listings.csv', SAMPLE_SIZE=-1);
-    `);
+        await this.conn.query(`
+            CREATE OR REPLACE TABLE listings_raw AS
+            SELECT * FROM read_csv_auto('Listings.csv', SAMPLE_SIZE=-1);
+        `);
 
-    await this.conn.query(`
-        CREATE OR REPLACE TABLE reviews_raw AS
-        SELECT * FROM read_csv_auto('Reviews.csv', SAMPLE_SIZE=-1);
-    `);
+        await this.conn.query(`
+            CREATE OR REPLACE TABLE reviews_raw AS
+            SELECT * FROM read_csv_auto('Reviews.csv', SAMPLE_SIZE=-1);
+        `);
 
-    // Conta os reviews por imóvel ANTES de montar listings_clean — é o
-    // critério usado pra decidir quais 1000 imóveis por cidade ficam.
-    await this.conn.query(`
-        CREATE OR REPLACE TABLE review_counts AS
-        SELECT TRY_CAST(listing_id AS BIGINT) AS listing_id, COUNT(*) AS n_reviews
-        FROM reviews_raw
-        WHERE TRY_CAST(listing_id AS BIGINT) IS NOT NULL
-        GROUP BY 1;
-    `);
+        // Conta os reviews por imóvel ANTES de montar listings_clean — é o
+        // critério usado pra decidir quais imóveis por cidade ficam, e
+        // também pra ordenar os mapas depois (ver listingsForMap /
+        // listingsInCity).
+        await this.conn.query(`
+            CREATE OR REPLACE TABLE review_counts AS
+            SELECT TRY_CAST(listing_id AS BIGINT) AS listing_id, COUNT(*) AS n_reviews
+            FROM reviews_raw
+            WHERE TRY_CAST(listing_id AS BIGINT) IS NOT NULL
+            GROUP BY 1;
+        `);
 
-    await this.conn.query(`
-        CREATE OR REPLACE TABLE listings_clean AS
-        SELECT * EXCLUDE (n_reviews) FROM (
+        // n_reviews fica como coluna normal em listings_clean (sem EXCLUDE)
+        // porque listingsForMap/listingsInCity precisam dela pra ordenar.
+        await this.conn.query(`
+            CREATE OR REPLACE TABLE listings_clean AS
+            SELECT * FROM (
+                SELECT
+                    l.listing_id,
+                    l.name,
+                    l.neighbourhood,
+                    l.district,
+                    l.city,
+                    l.property_type,
+                    l.room_type,
+                    l.accommodates,
+                    l.bedrooms,
+                    TRY_CAST(REPLACE(REPLACE(CAST(l.price AS VARCHAR), '$', ''), ',', '') AS DOUBLE) AS price,
+                    TRY_CAST(REPLACE(REPLACE(CAST(l.price AS VARCHAR), '$', ''), ',', '') AS DOUBLE) / CASE l.city
+                        WHEN 'Paris' THEN 0.825
+                        WHEN 'Rome' THEN 0.825
+                        WHEN 'New York' THEN 1.00
+                        WHEN 'Sydney' THEN 1.29
+                        WHEN 'Rio de Janeiro' THEN 5.40
+                        WHEN 'Istanbul' THEN 7.00
+                        WHEN 'Mexico City' THEN 20.0
+                        WHEN 'Bangkok' THEN 30.0
+                        WHEN 'Cape Town' THEN 14.8
+                        WHEN 'Hong Kong' THEN 7.75
+                        ELSE 1.00
+                    END AS price_usd,
+                    l.minimum_nights,
+                    l.maximum_nights,
+                    TRY_CAST(l.latitude AS DOUBLE) AS latitude,
+                    TRY_CAST(l.longitude AS DOUBLE) AS longitude,
+                    TRY_CAST(l.review_scores_rating AS DOUBLE) AS review_scores_rating,
+                    TRY_CAST(l.review_scores_accuracy AS DOUBLE) AS review_scores_accuracy,
+                    TRY_CAST(l.review_scores_cleanliness AS DOUBLE) AS review_scores_cleanliness,
+                    TRY_CAST(l.review_scores_checkin AS DOUBLE) AS review_scores_checkin,
+                    TRY_CAST(l.review_scores_communication AS DOUBLE) AS review_scores_communication,
+                    TRY_CAST(l.review_scores_location AS DOUBLE) AS review_scores_location,
+                    TRY_CAST(l.review_scores_value AS DOUBLE) AS review_scores_value,
+                    l.host_id,
+                    l.host_since,
+                    l.host_is_superhost,
+                    l.host_identity_verified,
+                    l.instant_bookable,
+                    COALESCE(rc.n_reviews, 0) AS n_reviews
+                FROM listings_raw AS l
+                LEFT JOIN review_counts AS rc ON rc.listing_id = TRY_CAST(l.listing_id AS BIGINT)
+                WHERE TRY_CAST(l.latitude AS DOUBLE) IS NOT NULL
+                  AND TRY_CAST(l.longitude AS DOUBLE) IS NOT NULL
+                  AND TRY_CAST(REPLACE(REPLACE(CAST(l.price AS VARCHAR), '$', ''), ',', '') AS DOUBLE) IS NOT NULL
+                  AND TRY_CAST(l.review_scores_rating AS DOUBLE) IS NOT NULL
+            )
+            QUALIFY ROW_NUMBER() OVER (PARTITION BY city ORDER BY n_reviews DESC) <= ${DATA_LOAD_CAP_PER_CITY};
+        `);
+
+        // Mantém só os reviews dos imóveis que sobraram em listings_clean —
+        // já que reduzimos os listings, não faz sentido carregar reviews de
+        // imóveis que nem existem mais na tabela final.
+        await this.conn.query(`
+            CREATE OR REPLACE TABLE reviews_clean AS
             SELECT
-                l.listing_id,
-                l.name,
-                l.neighbourhood,
-                l.district,
-                l.city,
-                l.property_type,
-                l.room_type,
-                l.accommodates,
-                l.bedrooms,
-                TRY_CAST(REPLACE(REPLACE(CAST(l.price AS VARCHAR), '$', ''), ',', '') AS DOUBLE) AS price,
-                TRY_CAST(REPLACE(REPLACE(CAST(l.price AS VARCHAR), '$', ''), ',', '') AS DOUBLE) / CASE l.city
-                    WHEN 'Paris' THEN 0.825
-                    WHEN 'Rome' THEN 0.825
-                    WHEN 'New York' THEN 1.00
-                    WHEN 'Sydney' THEN 1.29
-                    WHEN 'Rio de Janeiro' THEN 5.40
-                    WHEN 'Istanbul' THEN 7.00
-                    WHEN 'Mexico City' THEN 20.0
-                    WHEN 'Bangkok' THEN 30.0
-                    WHEN 'Cape Town' THEN 14.8
-                    WHEN 'Hong Kong' THEN 7.75
-                    ELSE 1.00
-                END AS price_usd,
-                l.minimum_nights,
-                l.maximum_nights,
-                TRY_CAST(l.latitude AS DOUBLE) AS latitude,
-                TRY_CAST(l.longitude AS DOUBLE) AS longitude,
-                TRY_CAST(l.review_scores_rating AS DOUBLE) AS review_scores_rating,
-                TRY_CAST(l.review_scores_accuracy AS DOUBLE) AS review_scores_accuracy,
-                TRY_CAST(l.review_scores_cleanliness AS DOUBLE) AS review_scores_cleanliness,
-                TRY_CAST(l.review_scores_checkin AS DOUBLE) AS review_scores_checkin,
-                TRY_CAST(l.review_scores_communication AS DOUBLE) AS review_scores_communication,
-                TRY_CAST(l.review_scores_location AS DOUBLE) AS review_scores_location,
-                TRY_CAST(l.review_scores_value AS DOUBLE) AS review_scores_value,
-                l.host_id,
-                l.host_since,
-                l.host_is_superhost,
-                l.host_identity_verified,
-                l.instant_bookable,
-                COALESCE(rc.n_reviews, 0) AS n_reviews
-            FROM listings_raw AS l
-            LEFT JOIN review_counts AS rc ON rc.listing_id = TRY_CAST(l.listing_id AS BIGINT)
-            WHERE TRY_CAST(l.latitude AS DOUBLE) IS NOT NULL
-              AND TRY_CAST(l.longitude AS DOUBLE) IS NOT NULL
-              AND TRY_CAST(REPLACE(REPLACE(CAST(l.price AS VARCHAR), '$', ''), ',', '') AS DOUBLE) IS NOT NULL
-              AND TRY_CAST(l.review_scores_rating AS DOUBLE) IS NOT NULL
-        )
-        QUALIFY ROW_NUMBER() OVER (PARTITION BY city ORDER BY n_reviews DESC) <= 3000;
-    `);
+                TRY_CAST(r.listing_id AS BIGINT) AS listing_id,
+                r.review_id,
+                TRY_CAST(r.date AS DATE) AS date_parsed
+            FROM reviews_raw AS r
+            WHERE TRY_CAST(r.listing_id AS BIGINT) IS NOT NULL
+              AND TRY_CAST(r.listing_id AS BIGINT) IN (SELECT listing_id FROM listings_clean);
+        `);
 
-    // Mantém só os reviews dos imóveis que sobraram em listings_clean —
-    // já que reduzimos os listings, não faz sentido carregar reviews de
-    // imóveis que nem existem mais na tabela final.
-    await this.conn.query(`
-        CREATE OR REPLACE TABLE reviews_clean AS
-        SELECT
-            TRY_CAST(r.listing_id AS BIGINT) AS listing_id,
-            r.review_id,
-            TRY_CAST(r.date AS DATE) AS date_parsed
-        FROM reviews_raw AS r
-        WHERE TRY_CAST(r.listing_id AS BIGINT) IS NOT NULL
-          AND TRY_CAST(r.listing_id AS BIGINT) IN (SELECT listing_id FROM listings_clean);
-    `);
+        await this.conn.query(`DROP TABLE listings_raw;`);
+        await this.conn.query(`DROP TABLE reviews_raw;`);
+        await this.conn.query(`DROP TABLE review_counts;`);
+    }
 
-    await this.conn.query(`DROP TABLE listings_raw;`);
-    await this.conn.query(`DROP TABLE reviews_raw;`);
-    await this.conn.query(`DROP TABLE review_counts;`);
-}
     // Função auxiliar para resolver Mojibake e caracteres truncados
     fixEncoding(str) {
         if (!str) return str;
         let attempt = str;
-        
+
         while (attempt.length > 0) {
             try {
                 return decodeURIComponent(escape(attempt));
@@ -199,14 +213,14 @@ async loadAirbnb(listingsPath = '/Airbnb Data/Listings.csv', reviewsPath = '/Air
     async query(sql) {
         if (!this.db || !this.conn) throw new Error('Banco não inicializado. Chame init() primeiro.');
         const res = await this.conn.query(sql);
-        
+
         return res.toArray().map((row) => {
             const obj = row.toJSON();
             for (const key in obj) {
                 // Corrige os BigInts para o D3
                 if (typeof obj[key] === 'bigint') obj[key] = Number(obj[key]);
-                
-                // Limpa a sujeira de codificação, MAS ignora colunas criadas 
+
+                // Limpa a sujeira de codificação, MAS ignora colunas criadas
                 // pelo nosso próprio SQL (bin_label e month).
                 if (typeof obj[key] === 'string' && key !== 'bin_label' && key !== 'month') {
                     obj[key] = this.fixEncoding(obj[key]);
@@ -217,32 +231,14 @@ async loadAirbnb(listingsPath = '/Airbnb Data/Listings.csv', reviewsPath = '/Air
     }
 
     // --- Consultas usadas pelas views coordenadas -------------------------
-    async query(sql) {
-        if (!this.db || !this.conn) throw new Error('Banco não inicializado. Chame init() primeiro.');
-        const res = await this.conn.query(sql);
 
-        return res.toArray().map((row) => {
-            const obj = row.toJSON();
-            for (const key in obj) {
-                if (typeof obj[key] === 'bigint') obj[key] = Number(obj[key]);
-                if (typeof obj[key] === 'string' && key !== 'bin_label' && key !== 'month') {
-                    obj[key] = this.fixEncoding(obj[key]);
-                }
-            }
-            return obj;
-        });
-    }
-
-    // --- Consultas usadas pelas views coordenadas -------------------------
-
-    // RESTAURADO — sem isso o mapa principal nunca tem dados pra desenhar.
     async listingsForMap(filters = {}) {
         const where = buildWhereClause({ cities: filters.cities, priceRange: filters.priceRange, dateRange: filters.dateRange });
         const sql = `
             SELECT listing_id, name, city, neighbourhood, room_type, property_type,
                    latitude, longitude, price, price_usd, review_scores_rating
             FROM (
-                SELECT *, ROW_NUMBER() OVER (PARTITION BY city ORDER BY listing_id) AS rn
+                SELECT *, ROW_NUMBER() OVER (PARTITION BY city ORDER BY n_reviews DESC) AS rn
                 FROM listings_clean AS l
                 WHERE ${where}
             ) AS sampled
@@ -251,9 +247,6 @@ async loadAirbnb(listingsPath = '/Airbnb Data/Listings.csv', reviewsPath = '/Air
         return this.query(sql);
     }
 
-    // ÚNICA versão de listingsInCity — apague a segunda definição que
-    // existia mais abaixo no arquivo (a com `ORDER BY random()` e
-    // selectedClause solto), ela estava sobrescrevendo esta aqui.
     async listingsInCity(city, filters = {}, selectedListingId = null) {
         const baseWhere = buildWhereClause({ ...filters, cities: [city] });
         const hasSelection = selectedListingId != null;
@@ -341,9 +334,7 @@ async loadAirbnb(listingsPath = '/Airbnb Data/Listings.csv', reviewsPath = '/Air
 
     async listCities() {
         const sql = `
-            SELECT 
-                city, 
-                LEAST(COUNT(*), ${MAX_MAP_POINTS_PER_CITY}) AS n
+            SELECT city, COUNT(*) AS n
             FROM listings_clean
             WHERE latitude IS NOT NULL AND longitude IS NOT NULL
             GROUP BY city
