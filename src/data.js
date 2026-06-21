@@ -16,6 +16,10 @@ export const PRICE_BINS = [
     { min: 700, max: Infinity, label: '700+' },
 ];
 
+// Limite de pontos no mapa para evitar renderização excessiva e lag.
+export const MAX_MAP_POINTS_PER_CITY = 125; // controla o número de pontos por cidade
+export const MAX_DETAIL_MAP_POINTS = 225; // controla a riqueza de detalhes
+
 // Monta a cláusula WHERE compartilhada por (quase) todas as consultas, a
 // partir do objeto de filtros guardado em state.js.
 export function buildWhereClause(filters = {}) {
@@ -187,8 +191,12 @@ export class DataLoader {
         const sql = `
             SELECT listing_id, name, city, neighbourhood, room_type, property_type,
                    latitude, longitude, price, price_usd, review_scores_rating
-            FROM listings_clean AS l
-            WHERE ${where};
+            FROM (
+                SELECT *, ROW_NUMBER() OVER (PARTITION BY city ORDER BY random()) AS rn
+                FROM listings_clean AS l
+                WHERE ${where}
+            ) AS sampled
+            WHERE rn <= ${MAX_MAP_POINTS_PER_CITY};
         `;
         return this.query(sql);
     }
@@ -277,15 +285,22 @@ export class DataLoader {
 
     // Mapa de detalhe com os listings da MESMA cidade, mas agora
     // respeitando ativamente os filtros globais aplicados.
-    async listingsInCity(city, filters = {}) {
-        const where = buildWhereClause({ ...filters, cities: [city] });
+    async listingsInCity(city, filters = {}, selectedListingId = null) {
+        const baseWhere = buildWhereClause({ ...filters, cities: [city] });
+        const selectedClause = selectedListingId != null ? ` OR l.listing_id = ${Number(selectedListingId)}` : '';
 
         const sql = `
             SELECT listing_id, name, city, neighbourhood, room_type, property_type,
                    latitude, longitude, price_usd, review_scores_rating
-            FROM listings_clean AS l
-            WHERE ${where}
-              AND l.latitude IS NOT NULL AND l.longitude IS NOT NULL;
+            FROM (
+                SELECT *, ROW_NUMBER() OVER (ORDER BY random()) AS rn
+                FROM listings_clean AS l
+                WHERE (${baseWhere})
+                  AND l.latitude IS NOT NULL AND l.longitude IS NOT NULL
+                  ${selectedClause}
+            ) AS sampled
+            WHERE rn <= ${MAX_DETAIL_MAP_POINTS}
+               OR listing_id = ${selectedListingId != null ? Number(selectedListingId) : 'NULL'};
         `;
         return this.query(sql);
     }
