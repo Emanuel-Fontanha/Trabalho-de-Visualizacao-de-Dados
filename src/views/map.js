@@ -38,7 +38,7 @@ export function createMap(selector, { onSelect, onBrush } = {}) {
     const width = +svg.attr('width');
     const height = +svg.attr('height');
 
-    const legendH = 34; // faixa reservada no topo para a legenda de cor (global, compartilhada)
+    const legendH = 40; // faixa reservada no topo para a legenda de cor (global, compartilhada)
     const cellW = width / GRID_COLS;
     const cellH = (height - legendH) / GRID_ROWS;
     const cellMargin = { top: 16, right: 8, bottom: 8, left: 8 };
@@ -57,11 +57,11 @@ export function createMap(selector, { onSelect, onBrush } = {}) {
         gradient.append('stop').attr('offset', `${t * 100}%`).attr('stop-color', color.interpolator()(t));
     });
     const legendW = 140;
-    const legend = svg.append('g').attr('class', 'legend').attr('transform', `translate(${(width - legendW) / 2}, 6)`);
-    legend.append('text').attr('class', 'legend-title').attr('x', 0).attr('y', -2).text('Avaliação média');
-    legend.append('rect').attr('y', 6).attr('width', legendW).attr('height', 8).attr('fill', 'url(#rating-gradient)').attr('rx', 4);
-    const legendMin = legend.append('text').attr('class', 'legend-label').attr('x', 0).attr('y', 28);
-    const legendMax = legend.append('text').attr('class', 'legend-label').attr('x', legendW).attr('y', 28).attr('text-anchor', 'end');
+    const legend = svg.append('g').attr('class', 'legend').attr('transform', `translate(${(width - legendW) / 2}, 14)`);
+    legend.append('text').attr('class', 'legend-title').attr('x', 0).attr('y', 0).text('Avaliação média');
+    legend.append('rect').attr('y', 8).attr('width', legendW).attr('height', 8).attr('fill', 'url(#rating-gradient)').attr('rx', 4);
+    const legendMin = legend.append('text').attr('class', 'legend-label').attr('x', 0).attr('y', 30);
+    const legendMax = legend.append('text').attr('class', 'legend-label').attr('x', legendW).attr('y', 30).attr('text-anchor', 'end');
 
     // Tooltip: div HTML absoluto sobre o painel (o painel precisa de
     // position:relative no CSS para isso funcionar). Compartilhado por
