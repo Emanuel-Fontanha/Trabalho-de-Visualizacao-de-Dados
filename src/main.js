@@ -11,6 +11,9 @@ const detailsEl = document.querySelector('#details');
 const statusEl = document.querySelector('#filter-status');
 const loadingEl = document.querySelector('#loading');
 const clearBtn = document.querySelector('#clear-filters');
+// *** NOVO: elemento que mostra "N filtros ativos" ao lado do botão de
+// limpar — ver showClearFeedback()/updateActiveFilterCount() abaixo.
+const activeFilterCountEl = document.querySelector('#active-filter-count');
 // *** NOVO: filtro de cidade (where) — pedido explícito do enunciado do
 // trabalho ("filtro por região"). #city-filter é uma div vazia no HTML;
 // os chips são criados dinamicamente em buildCityChips(), depois que
@@ -90,6 +93,54 @@ function clearCityChips() {
     cityFilterEl?.querySelectorAll('.city-chip.active').forEach((el) => el.classList.remove('active'));
 }
 
+// *** NOVO: feedback visual do botão "Limpar filtros" ***
+// O botão, sozinho, não dizia nada sobre o que aconteceu ao ser clicado
+// (nenhuma mudança de texto/cor) — o usuário só percebia o efeito
+// indiretamente, vendo os gráficos mudarem. Duas coisas resolvem isso:
+//  1. clique no botão troca o texto por "✓ Filtros limpos" por 1,1s;
+//  2. um contador ("3 filtros ativos") aparece ao lado do botão sempre
+//     que algum filtro estiver aplicado, e desaparece quando não há
+//     nenhum — assim dá pra perceber a limpeza mesmo sem prestar atenção
+//     exatamente no instante do clique.
+const clearBtnDefaultText = clearBtn ? clearBtn.textContent : '';
+let clearFeedbackTimeout = null;
+
+function showClearFeedback() {
+    if (!clearBtn) return;
+    clearTimeout(clearFeedbackTimeout);
+    clearBtn.textContent = '✓ Filtros limpos';
+    clearBtn.classList.add('clear-btn-confirmed');
+    clearFeedbackTimeout = setTimeout(() => {
+        clearBtn.textContent = clearBtnDefaultText;
+        clearBtn.classList.remove('clear-btn-confirmed');
+    }, 1100);
+}
+
+// Conta quantos filtros estão ativos no momento (cada chave não-nula em
+// state.filters conta 1, exceto cities, que conta só se tiver alguma
+// cidade marcada) — usado só para o contador ao lado do botão, não afeta
+// nenhuma consulta.
+function countActiveFilters(filters) {
+    let n = 0;
+    if (filters.cities && filters.cities.length > 0) n++;
+    if (filters.priceRange) n++;
+    if (filters.bbox) n++;
+    if (filters.dateRange) n++;
+    return n;
+}
+
+function updateActiveFilterCount(filters) {
+    if (!activeFilterCountEl) return;
+    const n = countActiveFilters(filters);
+    if (n === 0) {
+        activeFilterCountEl.textContent = '';
+        activeFilterCountEl.style.display = 'none';
+    } else {
+        activeFilterCountEl.textContent = n === 1 ? '1 filtro ativo' : `${n} filtros ativos`;
+        activeFilterCountEl.style.display = 'inline';
+    }
+}
+
 function formatStatus(summary) {
     if (!statusEl) return;
     const n = summary?.n_listings ?? 0;
@@ -121,6 +172,7 @@ async function renderAll(state) {
     timelineView.update(timelineData);
     histogramView.update(histData, activeBinLabel(filters));
     formatStatus(summary);
+    updateActiveFilterCount(filters);
 
     if (selection) {
         const listing = await loader.listingDetails(selection);
@@ -136,6 +188,7 @@ clearBtn?.addEventListener('click', () => {
     timelineView.clearBrush();
     clearCityChips();
     clearFilters();
+    showClearFeedback();
 });
 
 async function main() {

@@ -1,4 +1,14 @@
 /* Estilos para a página */
+
+/* Variáveis usadas dentro dos SVGs gerados por timeline.js e
+   histogram.js (var(--accent-teal), var(--ink)) — definidas aqui para
+   que tenham um valor real em vez de cair no preto padrão do navegador
+   quando a variável não existe. */
+:root {
+	--accent-teal: #2F9E96;
+	--ink: #222;
+}
+
 body {
 	font-family: Arial, sans-serif;
 	background-color: #f5f5f5;
@@ -103,8 +113,26 @@ svg {
 	background: #fff;
 	border-radius: 5px;
 	cursor: pointer;
+	transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 #clear-filters:hover { background: #eee; }
+/* *** NOVO: feedback visual ao clicar em "Limpar filtros" — o botão
+   troca de cor e texto por ~1s (ver showClearFeedback() em main.js) */
+#clear-filters.clear-btn-confirmed {
+	background: #2F9E96;
+	border-color: #2F9E96;
+	color: #fff;
+	font-weight: 600;
+}
+/* *** NOVO: contador "N filtros ativos" ao lado do botão — visível só
+   quando algum filtro está aplicado (ver updateActiveFilterCount()) */
+.active-filter-count {
+	display: none;
+	margin-left: 8px;
+	font-size: 12px;
+	color: #E8714A;
+	font-weight: 600;
+}
 #filter-status { font-size: 13px; color: #555; margin: 4px 0 10px; }
 
 /* Tela de carregamento simples */
