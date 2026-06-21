@@ -76,7 +76,7 @@ async loadAirbnb(listingsPath = '/Airbnb Data/Listings.csv', reviewsPath = '/Air
     // Os CSVs do Inside Airbnb costumam vir em Windows-1252, não UTF-8
     // puro. Decodificar aqui evita o erro "Invalid unicode (byte
     // sequence mismatch)" que o DuckDB lança ao ler os bytes brutos
-    // como UTF-8.
+    // como UTF-8.    
     const decoder = new TextDecoder('windows-1252');
     const text1 = decoder.decode(buf1);
     const text2 = decoder.decode(buf2);
@@ -89,72 +89,93 @@ async loadAirbnb(listingsPath = '/Airbnb Data/Listings.csv', reviewsPath = '/Air
         SELECT * FROM read_csv_auto('Listings.csv', SAMPLE_SIZE=-1);
     `);
 
-        await this.conn.query(`
-            CREATE OR REPLACE TABLE reviews_raw AS
-            SELECT * FROM read_csv_auto('Reviews.csv', SAMPLE_SIZE=-1);
-        `);
+    await this.conn.query(`
+        CREATE OR REPLACE TABLE reviews_raw AS
+        SELECT * FROM read_csv_auto('Reviews.csv', SAMPLE_SIZE=-1);
+    `);
+
+    // Conta os reviews por imóvel ANTES de montar listings_clean — é o
+    // critério usado pra decidir quais 1000 imóveis por cidade ficam.
+    await this.conn.query(`
+        CREATE OR REPLACE TABLE review_counts AS
+        SELECT TRY_CAST(listing_id AS BIGINT) AS listing_id, COUNT(*) AS n_reviews
+        FROM reviews_raw
+        WHERE TRY_CAST(listing_id AS BIGINT) IS NOT NULL
+        GROUP BY 1;
+    `);
 
     await this.conn.query(`
         CREATE OR REPLACE TABLE listings_clean AS
-        SELECT
-            listing_id,
-            name,
-            neighbourhood,
-            district,
-            city,
-            property_type,
-            room_type,
-            accommodates,
-            bedrooms,
-            TRY_CAST(REPLACE(REPLACE(CAST(price AS VARCHAR), '$', ''), ',', '') AS DOUBLE) AS price,
-            TRY_CAST(REPLACE(REPLACE(CAST(price AS VARCHAR), '$', ''), ',', '') AS DOUBLE) / CASE city
-                WHEN 'Paris' THEN 0.825
-                WHEN 'Rome' THEN 0.825
-                WHEN 'New York' THEN 1.00
-                WHEN 'Sydney' THEN 1.29
-                WHEN 'Rio de Janeiro' THEN 5.40
-                WHEN 'Istanbul' THEN 7.00
-                WHEN 'Mexico City' THEN 20.0
-                WHEN 'Bangkok' THEN 30.0
-                WHEN 'Cape Town' THEN 14.8
-                WHEN 'Hong Kong' THEN 7.75
-                ELSE 1.00
-            END AS price_usd,
-            minimum_nights,
-            maximum_nights,
-            TRY_CAST(latitude AS DOUBLE) AS latitude,
-            TRY_CAST(longitude AS DOUBLE) AS longitude,
-            TRY_CAST(review_scores_rating AS DOUBLE) AS review_scores_rating,
-            TRY_CAST(review_scores_accuracy AS DOUBLE) AS review_scores_accuracy,
-            TRY_CAST(review_scores_cleanliness AS DOUBLE) AS review_scores_cleanliness,
-            TRY_CAST(review_scores_checkin AS DOUBLE) AS review_scores_checkin,
-            TRY_CAST(review_scores_communication AS DOUBLE) AS review_scores_communication,
-            TRY_CAST(review_scores_location AS DOUBLE) AS review_scores_location,
-            TRY_CAST(review_scores_value AS DOUBLE) AS review_scores_value,
-            host_id,
-            host_since,
-            host_is_superhost,
-            host_identity_verified,
-            instant_bookable
-        FROM listings_raw
-        WHERE TRY_CAST(latitude AS DOUBLE) IS NOT NULL
-        AND TRY_CAST(longitude AS DOUBLE) IS NOT NULL
-        AND TRY_CAST(REPLACE(REPLACE(CAST(price AS VARCHAR), '$', ''), ',', '') AS DOUBLE) IS NOT NULL
-        AND TRY_CAST(review_scores_rating AS DOUBLE) IS NOT NULL;
+        SELECT * EXCLUDE (n_reviews) FROM (
+            SELECT
+                l.listing_id,
+                l.name,
+                l.neighbourhood,
+                l.district,
+                l.city,
+                l.property_type,
+                l.room_type,
+                l.accommodates,
+                l.bedrooms,
+                TRY_CAST(REPLACE(REPLACE(CAST(l.price AS VARCHAR), '$', ''), ',', '') AS DOUBLE) AS price,
+                TRY_CAST(REPLACE(REPLACE(CAST(l.price AS VARCHAR), '$', ''), ',', '') AS DOUBLE) / CASE l.city
+                    WHEN 'Paris' THEN 0.825
+                    WHEN 'Rome' THEN 0.825
+                    WHEN 'New York' THEN 1.00
+                    WHEN 'Sydney' THEN 1.29
+                    WHEN 'Rio de Janeiro' THEN 5.40
+                    WHEN 'Istanbul' THEN 7.00
+                    WHEN 'Mexico City' THEN 20.0
+                    WHEN 'Bangkok' THEN 30.0
+                    WHEN 'Cape Town' THEN 14.8
+                    WHEN 'Hong Kong' THEN 7.75
+                    ELSE 1.00
+                END AS price_usd,
+                l.minimum_nights,
+                l.maximum_nights,
+                TRY_CAST(l.latitude AS DOUBLE) AS latitude,
+                TRY_CAST(l.longitude AS DOUBLE) AS longitude,
+                TRY_CAST(l.review_scores_rating AS DOUBLE) AS review_scores_rating,
+                TRY_CAST(l.review_scores_accuracy AS DOUBLE) AS review_scores_accuracy,
+                TRY_CAST(l.review_scores_cleanliness AS DOUBLE) AS review_scores_cleanliness,
+                TRY_CAST(l.review_scores_checkin AS DOUBLE) AS review_scores_checkin,
+                TRY_CAST(l.review_scores_communication AS DOUBLE) AS review_scores_communication,
+                TRY_CAST(l.review_scores_location AS DOUBLE) AS review_scores_location,
+                TRY_CAST(l.review_scores_value AS DOUBLE) AS review_scores_value,
+                l.host_id,
+                l.host_since,
+                l.host_is_superhost,
+                l.host_identity_verified,
+                l.instant_bookable,
+                COALESCE(rc.n_reviews, 0) AS n_reviews
+            FROM listings_raw AS l
+            LEFT JOIN review_counts AS rc ON rc.listing_id = TRY_CAST(l.listing_id AS BIGINT)
+            WHERE TRY_CAST(l.latitude AS DOUBLE) IS NOT NULL
+              AND TRY_CAST(l.longitude AS DOUBLE) IS NOT NULL
+              AND TRY_CAST(REPLACE(REPLACE(CAST(l.price AS VARCHAR), '$', ''), ',', '') AS DOUBLE) IS NOT NULL
+              AND TRY_CAST(l.review_scores_rating AS DOUBLE) IS NOT NULL
+        )
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY city ORDER BY n_reviews DESC) <= 1000;
     `);
 
+    // Mantém só os reviews dos imóveis que sobraram em listings_clean —
+    // já que reduzimos os listings, não faz sentido carregar reviews de
+    // imóveis que nem existem mais na tabela final.
     await this.conn.query(`
         CREATE OR REPLACE TABLE reviews_clean AS
         SELECT
-            TRY_CAST(listing_id AS BIGINT) AS listing_id,
-            review_id,
-            TRY_CAST(date AS DATE) AS date_parsed
-        FROM reviews_raw
-        WHERE TRY_CAST(listing_id AS BIGINT) IS NOT NULL;
+            TRY_CAST(r.listing_id AS BIGINT) AS listing_id,
+            r.review_id,
+            TRY_CAST(r.date AS DATE) AS date_parsed
+        FROM reviews_raw AS r
+        WHERE TRY_CAST(r.listing_id AS BIGINT) IS NOT NULL
+          AND TRY_CAST(r.listing_id AS BIGINT) IN (SELECT listing_id FROM listings_clean);
     `);
 
-    }
-
+    await this.conn.query(`DROP TABLE listings_raw;`);
+    await this.conn.query(`DROP TABLE reviews_raw;`);
+    await this.conn.query(`DROP TABLE review_counts;`);
+}
     // Função auxiliar para resolver Mojibake e caracteres truncados
     fixEncoding(str) {
         if (!str) return str;
