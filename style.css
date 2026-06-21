@@ -67,6 +67,16 @@ svg {
 #timeline, #histogram { margin-top: 8px; }
 #timeline-chart, #histogram-chart { display: block; margin: 4px auto 12px; }
 
+#detail-map {
+    display: block;
+    background: #fcfcf9;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    cursor: grab;
+    margin: 0 auto;
+}
+#detail-map:active { cursor: grabbing; }
+
 .legend { font-size: 12px; }
 
 /* Chips de filtro de cidade (where) — montados dinamicamente por main.js */

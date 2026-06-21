@@ -3,7 +3,9 @@ import { subscribe, getState, updateFilters, setSelection, clearFilters } from '
 import { createMap } from './views/map.js';
 import { createTimeline } from './timeline.js';
 import { createHistogram } from './histogram.js';
+import { createDetailMap } from './detailMap.js';
 import { renderOverview, renderListing } from './details.js';
+import * as d3 from 'd3';
 
 const loader = new DataLoader();
 
@@ -45,6 +47,19 @@ const histogramView = createHistogram('#histogram-chart', {
     },
 });
 
+// *** NOVO: mapa de detalhe (zoom/pan) do imóvel selecionado — ver
+// src/detailMap.js. Diferente das outras views, não recebe dados a
+// cada renderAll(); é atualizado separadamente em updateDetailMap(),
+// chamado só quando `selection` muda (ver final de renderAll), porque
+// os dados que ele usa (listingsInCity) não dependem dos filtros
+// ativos — refazer essa consulta a cada filtro mudado seria
+// desperdício, já que o resultado seria sempre o mesmo enquanto a
+// seleção não mudar.
+const detailMapView = createDetailMap('#detail-map', {
+    onSelect: (d) => setSelection(d.listing_id)
+});
+let lastDetailMapListingId = null; // evita recentralizar o zoom em todo re-render do MESMO imóvel
+
 // Acha o bin ativo (se houver) a partir do filtro de preço corrente, só
 // para destacar a barra correspondente no histograma.
 function activeBinLabel(filters) {
@@ -67,7 +82,6 @@ function activeBinLabel(filters) {
 // continuaria com as cidades antigas, e o próximo clique do usuário
 // removeria (em vez de adicionar) a cidade clicada.
 const selectedCities = new Set();
-
 function buildCityChips(cities) {
     if (!cityFilterEl) return;
     cityFilterEl.innerHTML = '';
@@ -78,6 +92,7 @@ function buildCityChips(cities) {
         chip.type = 'button';
         chip.className = 'city-chip';
         chip.textContent = `${city} (${n})`;
+
         chip.addEventListener('click', () => {
             if (selectedCities.has(city)) selectedCities.delete(city);
             else selectedCities.add(city);
@@ -178,9 +193,35 @@ async function renderAll(state) {
         const listing = await loader.listingDetails(selection);
         if (myRequest !== requestId) return;
         renderListing(detailsEl, listing, { onClose: () => setSelection(null) });
+        
+        // Adicione a variável 'filters' aqui no meio:
+        await updateDetailMap(listing, filters, myRequest); 
     } else {
         renderOverview(detailsEl, { summary, neighbourhoods });
+        detailMapView.reset();
+        lastDetailMapListingId = null;
     }
+}
+
+// *** NOVO: busca os listings da mesma cidade do imóvel selecionado e
+// atualiza o mapa de detalhe. `recenter` só é true quando a seleção
+// MUDOU desde a última vez (lastDetailMapListingId) — assim, se o
+// usuário já deu zoom/pan manual no mapa de detalhe e algum outro
+// filtro disparar um re-render (ex: moveu o brush da timeline), o
+// zoom/pan dele não é resetado à força; só uma seleção NOVA recentraliza.
+async function updateDetailMap(listing, filters, myRequest) {
+    if (!listing || listing.latitude == null || listing.longitude == null) {
+        detailMapView.reset();
+        return;
+    }
+    
+    // Repasse o 'filters' para o banco de dados:
+    const cityPoints = await loader.listingsInCity(listing.city, filters); 
+    
+    if (myRequest !== requestId) return;
+    const isNewSelection = lastDetailMapListingId !== listing.listing_id;
+    detailMapView.update(cityPoints, listing.listing_id, isNewSelection);
+    lastDetailMapListingId = listing.listing_id;
 }
 
 clearBtn?.addEventListener('click', () => {

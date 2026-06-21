@@ -64,7 +64,10 @@ export function createTimeline(selector, { onBrush, onZoomChange } = {}) {
         .attr('transform', `translate(${innerW - 118}, -2)`)
         .style('cursor', 'pointer')
         .style('display', 'none')
-        .on('click', () => zoomTo(null));
+        .on('click', () => {
+            zoomTo(null); // 1. Volta o zoom do gráfico ao normal
+            if (onBrush) onBrush(null); // 2. Avisa o main.js para remover o filtro global
+        });
     zoomOutBtn.append('rect')
         .attr('width', 118).attr('height', 18).attr('rx', 9)
         .attr('fill', '#eef5f4').attr('stroke', 'var(--accent-teal)').attr('stroke-width', 1);
