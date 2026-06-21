@@ -6,7 +6,12 @@
 //  - detail: um listing selecionado no mapa -> mostra todos os atributos
 //    daquele imóvel específico.
 
-const fmtBRL = (v) => (v == null || isNaN(v) ? '—' : `R$ ${Math.round(v).toLocaleString('pt-BR')}`);
+// *** AJUSTE 10 CIDADES: era fmtBRL (R$), agora fmtUSD (US$) ***
+// Com 10 cidades em 9 moedas locais diferentes, o valor exibido é sempre
+// price_usd (convertido em data.js), então o formatador correto é USD —
+// mostrar "R$" sobre um valor que na verdade é em dólar confundiria quem
+// estiver explorando, por exemplo, os preços de Paris ou Bangkok.
+const fmtUSD = (v) => (v == null || isNaN(v) ? '—' : `US$ ${Math.round(v).toLocaleString('pt-BR')}`);
 const fmtNum = (v, digits = 1) => (v == null || isNaN(v) ? '—' : Number(v).toFixed(digits));
 
 function scoreBar(label, value) {
@@ -26,7 +31,7 @@ export function renderOverview(container, { summary, neighbourhoods }) {
         .map(
             (n) => `
         <div class="nb-row">
-            <span class="nb-name">${n.neighbourhood ?? '—'}</span>
+            <span class="nb-name">${n.neighbourhood ?? '—'} <em>(${n.city ?? '—'})</em></span>
             <div class="nb-track"><div class="nb-fill" style="width:${(n.n_listings / maxN) * 100}%"></div></div>
             <span class="nb-count">${n.n_listings}</span>
         </div>`
@@ -37,7 +42,7 @@ export function renderOverview(container, { summary, neighbourhoods }) {
         <div class="overview">
             <div class="stat-grid">
                 <div class="stat"><span class="stat-value">${summary?.n_listings ?? 0}</span><span class="stat-label">imóveis no filtro</span></div>
-                <div class="stat"><span class="stat-value">${fmtBRL(summary?.avg_price)}</span><span class="stat-label">preço médio / noite</span></div>
+                <div class="stat"><span class="stat-value">${fmtUSD(summary?.avg_price)}</span><span class="stat-label">preço médio / noite</span></div>
                 <div class="stat"><span class="stat-value">${fmtNum(summary?.avg_rating, 0)}</span><span class="stat-label">avaliação média</span></div>
             </div>
             <h3>Bairros mais frequentes</h3>
@@ -63,11 +68,11 @@ export function renderListing(container, listing, { onClose } = {}) {
         <div class="listing-detail">
             <button class="back-btn" id="back-to-overview">← Voltar para visão geral</button>
             <h3>${listing.name ?? 'Sem nome'}</h3>
-            <p class="muted">${listing.neighbourhood ?? ''}${listing.district ? ' · ' + listing.district : ''}</p>
+            <p class="muted">${listing.neighbourhood ?? ''}, ${listing.city ?? ''}${listing.district ? ' · ' + listing.district : ''}</p>
             <div class="badges">${badges}</div>
 
             <div class="stat-grid">
-                <div class="stat"><span class="stat-value">${fmtBRL(listing.price)}</span><span class="stat-label">por noite</span></div>
+                <div class="stat"><span class="stat-value">${fmtUSD(listing.price_usd)}</span><span class="stat-label">por noite</span></div>
                 <div class="stat"><span class="stat-value">${listing.accommodates ?? '—'}</span><span class="stat-label">hóspedes</span></div>
                 <div class="stat"><span class="stat-value">${listing.bedrooms ?? '—'}</span><span class="stat-label">quartos</span></div>
             </div>

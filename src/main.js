@@ -11,6 +11,11 @@ const detailsEl = document.querySelector('#details');
 const statusEl = document.querySelector('#filter-status');
 const loadingEl = document.querySelector('#loading');
 const clearBtn = document.querySelector('#clear-filters');
+// *** NOVO: filtro de cidade (where) — pedido explícito do enunciado do
+// trabalho ("filtro por região"). #city-filter é uma div vazia no HTML;
+// os chips são criados dinamicamente em buildCityChips(), depois que
+// loader.listCities() traz as cidades realmente presentes na amostra.
+const cityFilterEl = document.querySelector('#city-filter');
 
 // --- Views --------------------------------------------------------------
 // Cada view só conhece seu próprio SVG e os callbacks que dispara — toda a
@@ -44,6 +49,45 @@ function activeBinLabel(filters) {
     const [min, max] = filters.priceRange;
     const bin = PRICE_BINS.find((b) => b.min === min && (b.max === Infinity ? max === 1e9 : b.max === max));
     return bin ? bin.label : null;
+}
+
+// *** NOVO: monta os chips de filtro de cidade (where), um por cidade
+// presente na amostra. Clicar faz toggle (seleciona/deseleciona); nenhuma
+// cidade marcada = sem filtro = todas as 10. Reaproveita o mesmo
+// updateFilters() de qualquer outra view — o chip de cidade não é
+// estruturalmente diferente de um brush ou de um clique de barra, é só
+// outra fonte de mudança de estado.
+//
+// `selected` vive fora de buildCityChips (em vez de dentro dela) só para
+// que clearCityChips() consiga limpá-lo também — se ficasse só no closure
+// da função, "Limpar filtros" resetaria a aparência dos chips mas o Set
+// continuaria com as cidades antigas, e o próximo clique do usuário
+// removeria (em vez de adicionar) a cidade clicada.
+const selectedCities = new Set();
+
+function buildCityChips(cities) {
+    if (!cityFilterEl) return;
+    cityFilterEl.innerHTML = '';
+    selectedCities.clear();
+
+    cities.forEach(({ city, n }) => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'city-chip';
+        chip.textContent = `${city} (${n})`;
+        chip.addEventListener('click', () => {
+            if (selectedCities.has(city)) selectedCities.delete(city);
+            else selectedCities.add(city);
+            chip.classList.toggle('active');
+            updateFilters({ cities: selectedCities.size > 0 ? Array.from(selectedCities) : null });
+        });
+        cityFilterEl.appendChild(chip);
+    });
+}
+
+function clearCityChips() {
+    selectedCities.clear();
+    cityFilterEl?.querySelectorAll('.city-chip.active').forEach((el) => el.classList.remove('active'));
 }
 
 function formatStatus(summary) {
@@ -90,6 +134,7 @@ async function renderAll(state) {
 clearBtn?.addEventListener('click', () => {
     mapView.clearBrush();
     timelineView.clearBrush();
+    clearCityChips();
     clearFilters();
 });
 
@@ -98,6 +143,12 @@ async function main() {
 
     await loader.init();
     await loader.loadAirbnb();
+
+    // *** NOVO: popula o filtro de cidade com as cidades realmente
+    // presentes na amostra carregada (não hardcoded), depois que o banco
+    // já está pronto para ser consultado.
+    const cities = await loader.listCities();
+    buildCityChips(cities);
 
     if (loadingEl) loadingEl.style.display = 'none';
 

@@ -15,18 +15,38 @@
         <div class="dashboard">
             <div class="panel" id="map-panel">
                 <h2>Mapa (Where)</h2>
-                <svg id="map" width="700" height="500"></svg>
+                <svg id="map" width="700" height="420"></svg>
             </div>
             <div class="panel" id="controls-panel">
                 <h2>Overview & Controls</h2>
-                <div id="timeline"></div>
-                <div id="histogram"></div>
+
+                <h3>Cidades (Where)</h3>
+                <!-- populado dinamicamente por buildCityChips() em main.js,
+                     a partir de loader.listCities() -->
+                <div id="city-filter" class="chip-row"></div>
+
+                <h3>Linha do tempo de reviews (When)</h3>
+                <!--
+                  createTimeline('#timeline-chart', ...) em main.js espera um
+                  seletor que já aponte para um <svg> existente (igual ao do
+                  mapa acima) — timeline.js faz d3.select(selector).attr('width')
+                  direto na primeira linha, então a tag <svg> com width/height
+                  já definidos como atributos precisa estar aqui no HTML.
+                -->
+                <svg id="timeline-chart" width="430" height="180"></svg>
+
+                <h3>Distribuição de preço (What)</h3>
+                <svg id="histogram-chart" width="430" height="220"></svg>
             </div>
             <div class="panel" id="details-panel">
                 <h2>Details on demand</h2>
+                <button id="clear-filters" type="button">Limpar filtros</button>
+                <p id="filter-status"></p>
                 <div id="details"></div>
             </div>
         </div>
+
+        <div id="loading">Carregando dados…</div>
 
         <script src="https://d3js.org/d3.v7.min.js"></script>
         <script type="module" src="/src/main.js"></script>

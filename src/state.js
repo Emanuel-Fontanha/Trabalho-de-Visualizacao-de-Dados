@@ -5,8 +5,9 @@
 // diretamente, todas só conhecem este módulo.
 
 const initialFilters = {
-    priceRange: null, // [min, max] em R$  -> dimensão "what"
-    bbox: null, // {lonMin, lonMax, latMin, latMax} -> dimensão "where"
+    cities: null, // string[] | null  -> dimensão "where" (cidades selecionadas; null/[] = todas as 10)
+    priceRange: null, // [min, max] em USD (ver price_usd em data.js)  -> dimensão "what"
+    bbox: null, // {city, bbox:{lonMin, lonMax, latMin, latMax}} -> dimensão "where" (região dentro de 1 cidade)
     dateRange: null, // [isoStart, isoEnd] -> dimensão "when"
 };
 
