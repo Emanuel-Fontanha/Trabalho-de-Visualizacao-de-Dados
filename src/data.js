@@ -17,8 +17,8 @@ export const PRICE_BINS = [
 ];
 
 // Limite de pontos no mapa para evitar renderização excessiva e lag.
-export const MAX_MAP_POINTS_PER_CITY = 125; // controla o número de pontos por cidade
-export const MAX_DETAIL_MAP_POINTS = 225; // controla a riqueza de detalhes
+export const MAX_MAP_POINTS_PER_CITY = 1000; // controla o número de pontos por cidade
+export const MAX_DETAIL_MAP_POINTS = 2000; // controla a riqueza de detalhes
 
 // Monta a cláusula WHERE compartilhada por (quase) todas as consultas, a
 // partir do objeto de filtros guardado em state.js.
@@ -217,7 +217,25 @@ async loadAirbnb(listingsPath = '/Airbnb Data/Listings.csv', reviewsPath = '/Air
     }
 
     // --- Consultas usadas pelas views coordenadas -------------------------
+    async query(sql) {
+        if (!this.db || !this.conn) throw new Error('Banco não inicializado. Chame init() primeiro.');
+        const res = await this.conn.query(sql);
 
+        return res.toArray().map((row) => {
+            const obj = row.toJSON();
+            for (const key in obj) {
+                if (typeof obj[key] === 'bigint') obj[key] = Number(obj[key]);
+                if (typeof obj[key] === 'string' && key !== 'bin_label' && key !== 'month') {
+                    obj[key] = this.fixEncoding(obj[key]);
+                }
+            }
+            return obj;
+        });
+    }
+
+    // --- Consultas usadas pelas views coordenadas -------------------------
+
+    // RESTAURADO — sem isso o mapa principal nunca tem dados pra desenhar.
     async listingsForMap(filters = {}) {
         const where = buildWhereClause({ cities: filters.cities, priceRange: filters.priceRange, dateRange: filters.dateRange });
         const sql = `
@@ -229,6 +247,33 @@ async loadAirbnb(listingsPath = '/Airbnb Data/Listings.csv', reviewsPath = '/Air
                 WHERE ${where}
             ) AS sampled
             WHERE rn <= ${MAX_MAP_POINTS_PER_CITY};
+        `;
+        return this.query(sql);
+    }
+
+    // ÚNICA versão de listingsInCity — apague a segunda definição que
+    // existia mais abaixo no arquivo (a com `ORDER BY random()` e
+    // selectedClause solto), ela estava sobrescrevendo esta aqui.
+    async listingsInCity(city, filters = {}, selectedListingId = null) {
+        const baseWhere = buildWhereClause({ ...filters, cities: [city] });
+        const hasSelection = selectedListingId != null;
+        const selectedId = hasSelection ? Number(selectedListingId) : null;
+
+        const sql = `
+            SELECT listing_id, name, city, neighbourhood, room_type, property_type,
+                latitude, longitude, price_usd, review_scores_rating
+            FROM (
+                SELECT *,
+                    (${hasSelection ? `l.listing_id = ${selectedId}` : 'FALSE'}) AS is_selected,
+                    ROW_NUMBER() OVER (ORDER BY n_reviews DESC) AS rn
+                FROM listings_clean AS l
+                WHERE (
+                    (${baseWhere})
+                    AND l.latitude IS NOT NULL AND l.longitude IS NOT NULL
+                )
+                ${hasSelection ? `OR l.listing_id = ${selectedId}` : ''}
+            ) AS sampled
+            WHERE rn <= ${MAX_DETAIL_MAP_POINTS} OR is_selected;
         `;
         return this.query(sql);
     }
