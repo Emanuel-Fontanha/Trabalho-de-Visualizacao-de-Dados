@@ -1,16 +1,3 @@
-// Painel "Details on demand". Tem dois modos, e a troca entre eles É o
-// "overview + details on demand" de Munzner na prática:
-//  - overview: nada selecionado -> mostra estatísticas do conjunto filtrado
-//    atual (contagem, preço médio, avaliação média) e os bairros mais
-//    frequentes nesse conjunto.
-//  - detail: um listing selecionado no mapa -> mostra todos os atributos
-//    daquele imóvel específico.
-
-// *** AJUSTE 10 CIDADES: era fmtBRL (R$), agora fmtUSD (US$) ***
-// Com 10 cidades em 9 moedas locais diferentes, o valor exibido é sempre
-// price_usd (convertido em data.js), então o formatador correto é USD —
-// mostrar "R$" sobre um valor que na verdade é em dólar confundiria quem
-// estiver explorando, por exemplo, os preços de Paris ou Bangkok.
 const fmtUSD = (v) => (v == null || isNaN(v) ? '—' : `US$ ${Math.round(v).toLocaleString('pt-BR')}`);
 const fmtNum = (v, digits = 1) => (v == null || isNaN(v) ? '—' : Number(v).toFixed(digits));
 

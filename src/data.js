@@ -341,8 +341,11 @@ async loadAirbnb(listingsPath = '/Airbnb Data/Listings.csv', reviewsPath = '/Air
 
     async listCities() {
         const sql = `
-            SELECT city, COUNT(*) AS n
+            SELECT 
+                city, 
+                LEAST(COUNT(*), ${MAX_MAP_POINTS_PER_CITY}) AS n
             FROM listings_clean
+            WHERE latitude IS NOT NULL AND longitude IS NOT NULL
             GROUP BY city
             ORDER BY n DESC;
         `;
