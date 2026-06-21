@@ -64,84 +64,95 @@ export class DataLoader {
         this.conn = await this.db.connect();
     }
 
-    async loadAirbnb(listingsPath = '/Airbnb Data/Listings.csv', reviewsPath = '/Airbnb Data/Reviews.csv') {
-        if (!this.db || !this.conn) throw new Error('Banco não inicializado. Chame init() primeiro.');
+async loadAirbnb(listingsPath = '/Airbnb Data/Listings.csv', reviewsPath = '/Airbnb Data/Reviews.csv') {
+    if (!this.db || !this.conn) throw new Error('Banco não inicializado. Chame init() primeiro.');
 
-        const [r1, r2] = await Promise.all([fetch(listingsPath), fetch(reviewsPath)]);
-        if (!r1.ok) throw new Error(`Falha ao buscar ${listingsPath} (${r1.status})`);
-        if (!r2.ok) throw new Error(`Falha ao buscar ${reviewsPath} (${r2.status})`);
+    const [r1, r2] = await Promise.all([fetch(listingsPath), fetch(reviewsPath)]);
+    if (!r1.ok) throw new Error(`Falha ao buscar ${listingsPath} (${r1.status})`);
+    if (!r2.ok) throw new Error(`Falha ao buscar ${reviewsPath} (${r2.status})`);
 
-        const [buf1, buf2] = await Promise.all([r1.arrayBuffer(), r2.arrayBuffer()]);
-        await this.db.registerFileBuffer('Listings.csv', new Uint8Array(buf1));
-        await this.db.registerFileBuffer('Reviews.csv', new Uint8Array(buf2));
+    const [buf1, buf2] = await Promise.all([r1.arrayBuffer(), r2.arrayBuffer()]);
 
-        await this.conn.query(`
-            CREATE OR REPLACE TABLE listings_raw AS
-            SELECT * FROM read_csv_auto('Listings.csv', SAMPLE_SIZE=-1);
-        `);
+    // Os CSVs do Inside Airbnb costumam vir em Windows-1252, não UTF-8
+    // puro. Decodificar aqui evita o erro "Invalid unicode (byte
+    // sequence mismatch)" que o DuckDB lança ao ler os bytes brutos
+    // como UTF-8.
+    const decoder = new TextDecoder('windows-1252');
+    const text1 = decoder.decode(buf1);
+    const text2 = decoder.decode(buf2);
+
+    await this.db.registerFileText('Listings.csv', text1);
+    await this.db.registerFileText('Reviews.csv', text2);
+
+    await this.conn.query(`
+        CREATE OR REPLACE TABLE listings_raw AS
+        SELECT * FROM read_csv_auto('Listings.csv', SAMPLE_SIZE=-1);
+    `);
 
         await this.conn.query(`
             CREATE OR REPLACE TABLE reviews_raw AS
             SELECT * FROM read_csv_auto('Reviews.csv', SAMPLE_SIZE=-1);
         `);
 
-        await this.conn.query(`
-            CREATE OR REPLACE VIEW listings_clean AS
-            SELECT
-                listing_id,
-                name,
-                neighbourhood,
-                district,
-                city,
-                property_type,
-                room_type,
-                accommodates,
-                bedrooms,
-                TRY_CAST(REPLACE(REPLACE(CAST(price AS VARCHAR), '$', ''), ',', '') AS DOUBLE) AS price,
-                TRY_CAST(REPLACE(REPLACE(CAST(price AS VARCHAR), '$', ''), ',', '') AS DOUBLE) / CASE city
-                    WHEN 'Paris' THEN 0.825
-                    WHEN 'Rome' THEN 0.825
-                    WHEN 'New York' THEN 1.00
-                    WHEN 'Sydney' THEN 1.29
-                    WHEN 'Rio de Janeiro' THEN 5.40
-                    WHEN 'Istanbul' THEN 7.00
-                    WHEN 'Mexico City' THEN 20.0
-                    WHEN 'Bangkok' THEN 30.0
-                    WHEN 'Cape Town' THEN 14.8
-                    WHEN 'Hong Kong' THEN 7.75
-                    ELSE 1.00
-                END AS price_usd,
-                minimum_nights,
-                maximum_nights,
-                TRY_CAST(latitude AS DOUBLE) AS latitude,
-                TRY_CAST(longitude AS DOUBLE) AS longitude,
-                TRY_CAST(review_scores_rating AS DOUBLE) AS review_scores_rating,
-                TRY_CAST(review_scores_accuracy AS DOUBLE) AS review_scores_accuracy,
-                TRY_CAST(review_scores_cleanliness AS DOUBLE) AS review_scores_cleanliness,
-                TRY_CAST(review_scores_checkin AS DOUBLE) AS review_scores_checkin,
-                TRY_CAST(review_scores_communication AS DOUBLE) AS review_scores_communication,
-                TRY_CAST(review_scores_location AS DOUBLE) AS review_scores_location,
-                TRY_CAST(review_scores_value AS DOUBLE) AS review_scores_value,
-                host_id,
-                host_since,
-                host_is_superhost,
-                host_identity_verified,
-                instant_bookable
-            FROM listings_raw
-            WHERE TRY_CAST(latitude AS DOUBLE) IS NOT NULL
-              AND TRY_CAST(longitude AS DOUBLE) IS NOT NULL
-              AND TRY_CAST(REPLACE(REPLACE(CAST(price AS VARCHAR), '$', ''), ',', '') AS DOUBLE) IS NOT NULL;
-        `);
+    await this.conn.query(`
+        CREATE OR REPLACE TABLE listings_clean AS
+        SELECT
+            listing_id,
+            name,
+            neighbourhood,
+            district,
+            city,
+            property_type,
+            room_type,
+            accommodates,
+            bedrooms,
+            TRY_CAST(REPLACE(REPLACE(CAST(price AS VARCHAR), '$', ''), ',', '') AS DOUBLE) AS price,
+            TRY_CAST(REPLACE(REPLACE(CAST(price AS VARCHAR), '$', ''), ',', '') AS DOUBLE) / CASE city
+                WHEN 'Paris' THEN 0.825
+                WHEN 'Rome' THEN 0.825
+                WHEN 'New York' THEN 1.00
+                WHEN 'Sydney' THEN 1.29
+                WHEN 'Rio de Janeiro' THEN 5.40
+                WHEN 'Istanbul' THEN 7.00
+                WHEN 'Mexico City' THEN 20.0
+                WHEN 'Bangkok' THEN 30.0
+                WHEN 'Cape Town' THEN 14.8
+                WHEN 'Hong Kong' THEN 7.75
+                ELSE 1.00
+            END AS price_usd,
+            minimum_nights,
+            maximum_nights,
+            TRY_CAST(latitude AS DOUBLE) AS latitude,
+            TRY_CAST(longitude AS DOUBLE) AS longitude,
+            TRY_CAST(review_scores_rating AS DOUBLE) AS review_scores_rating,
+            TRY_CAST(review_scores_accuracy AS DOUBLE) AS review_scores_accuracy,
+            TRY_CAST(review_scores_cleanliness AS DOUBLE) AS review_scores_cleanliness,
+            TRY_CAST(review_scores_checkin AS DOUBLE) AS review_scores_checkin,
+            TRY_CAST(review_scores_communication AS DOUBLE) AS review_scores_communication,
+            TRY_CAST(review_scores_location AS DOUBLE) AS review_scores_location,
+            TRY_CAST(review_scores_value AS DOUBLE) AS review_scores_value,
+            host_id,
+            host_since,
+            host_is_superhost,
+            host_identity_verified,
+            instant_bookable
+        FROM listings_raw
+        WHERE TRY_CAST(latitude AS DOUBLE) IS NOT NULL
+        AND TRY_CAST(longitude AS DOUBLE) IS NOT NULL
+        AND TRY_CAST(REPLACE(REPLACE(CAST(price AS VARCHAR), '$', ''), ',', '') AS DOUBLE) IS NOT NULL
+        AND TRY_CAST(review_scores_rating AS DOUBLE) IS NOT NULL;
+    `);
 
-        await this.conn.query(`
-            CREATE OR REPLACE VIEW reviews_clean AS
-            SELECT
-                TRY_CAST(listing_id AS BIGINT) AS listing_id,
-                review_id,
-                TRY_CAST(date AS DATE) AS date_parsed
-            FROM reviews_raw
-            WHERE TRY_CAST(listing_id AS BIGINT) IS NOT NULL;
-        `);
+    await this.conn.query(`
+        CREATE OR REPLACE TABLE reviews_clean AS
+        SELECT
+            TRY_CAST(listing_id AS BIGINT) AS listing_id,
+            review_id,
+            TRY_CAST(date AS DATE) AS date_parsed
+        FROM reviews_raw
+        WHERE TRY_CAST(listing_id AS BIGINT) IS NOT NULL;
+    `);
+
     }
 
     // Função auxiliar para resolver Mojibake e caracteres truncados
