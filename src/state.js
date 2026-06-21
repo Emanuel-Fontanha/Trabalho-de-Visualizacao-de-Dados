@@ -1,9 +1,3 @@
-// Estado global da aplicação, com um pub/sub simples (observer pattern).
-// Toda view (mapa, timeline, histograma, detalhes) se inscreve via
-// subscribe() e reage sempre que o estado muda — é o mecanismo que liga
-// (linked views) as visualizações entre si: nenhuma view conhece a outra
-// diretamente, todas só conhecem este módulo.
-
 const initialFilters = {
     cities: null, // string[] | null  -> dimensão "where" (cidades selecionadas; null/[] = todas as 10)
     priceRange: null, // [min, max] em USD (ver price_usd em data.js)  -> dimensão "what"

@@ -1,9 +1,8 @@
 <!DOCTYPE html>
 <html lang="pt-br">
-    <!-- Estrutura básica do HTML -->
     <head>
         <meta charset="UTF-8">
-        <title>Trabalho de Visu de Dados</title>
+        <title>Airbnb Dashboard</title>
 
         <link rel="stylesheet" href="style.css">
     </head>
@@ -20,7 +19,7 @@
                 <hr style="border: 0; border-top: 1px solid #eee; margin: 16px 0 8px 0;">
                 <h3 style="margin: 0; font-size: 14px; color: #555;">Mapa da Cidade Selecionada</h3>
                 
-                <p style="margin: 4px 0 12px 0; font-size: 12px; color: #888;">Role o scroll do mouse para dar zoom e arraste para mover.</p>
+                <p style="margin: 4px 0 12px 0; font-size: 12px; color: #888;">Role o scroll do mouse para aplicar zoom e arraste para mover o mapa</p>
                 
                 <svg id="detail-map" width="700" height="240"></svg>
             </div>
@@ -28,21 +27,12 @@
                 <h2>Visão Geral & Controles</h2>
 
                 <h3>Cidades (Where)</h3>
-                <!-- populado dinamicamente por buildCityChips() em main.js,
-                     a partir de loader.listCities() -->
                 <div id="city-filter" class="chip-row"></div>
 
-                <h3>Linha do tempo de reviews (When)</h3>
-                <!--
-                  createTimeline('#timeline-chart', ...) em main.js espera um
-                  seletor que já aponte para um <svg> existente (igual ao do
-                  mapa acima) — timeline.js faz d3.select(selector).attr('width')
-                  direto na primeira linha, então a tag <svg> com width/height
-                  já definidos como atributos precisa estar aqui no HTML.
-                -->
+                <h3>Linha do tempo de Reviews (When)</h3>
                 <svg id="timeline-chart" width="430" height="180"></svg>
 
-                <h3>Distribuição de preço (What)</h3>
+                <h3>Distribuição de Preços (What)</h3>
                 <svg id="histogram-chart" width="430" height="220"></svg>
             </div>
             <div class="panel" id="details-panel">
@@ -62,8 +52,6 @@
 
 <!--         <script src="https://d3js.org/d3.v7.min.js"></script>
         <script src="/script.js"></script> -->
-
-        <!-- descomentar script acima caso deseja trocar para a implementação anterior direto com script -->
     </body>
 
 </html>

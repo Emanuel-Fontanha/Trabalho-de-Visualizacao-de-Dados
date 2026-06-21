@@ -9,9 +9,6 @@ const ROOM_COLORS = {
     'Hotel room': '#7A98A0', // tom neutro, categoria rara na amostra
 };
 
-// View "What": quantos imóveis existem em cada faixa de preço, decompostos
-// por tipo de quarto (canal de cor). Clicar numa barra filtra por aquela
-// faixa de preço; clicar de novo na mesma barra remove o filtro (toggle).
 export function createHistogram(selector, { onBarClick } = {}) {
     const svg = d3.select(selector);
     const width = +svg.attr('width');
@@ -30,9 +27,6 @@ export function createHistogram(selector, { onBarClick } = {}) {
     const stackGen = d3.stack().keys(ROOM_TYPES);
 
     function pivot(rows) {
-        // Transforma [{bin_label, room_type, n}, ...] em uma linha por bin,
-        // com uma coluna por room_type (preenchendo combinações ausentes com
-        // 0) — formato que d3.stack espera.
         const byBin = new Map(PRICE_BINS.map((b) => [b.label, { bin_label: b.label }]));
         byBin.forEach((row) => ROOM_TYPES.forEach((rt) => (row[rt] = 0)));
         (rows || []).forEach((r) => {

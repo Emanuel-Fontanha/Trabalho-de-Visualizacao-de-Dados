@@ -162,11 +162,6 @@ function formatStatus(summary) {
     statusEl.textContent = n === 1 ? '1 imóvel no filtro atual' : `${n} imóveis no filtro atual`;
 }
 
-// --- Re-renderização coordenada ------------------------------------------
-// Toda vez que o estado muda (qualquer filtro ou seleção), refaz as 5
-// consultas relevantes e atualiza as 4 views. Um contador de requisição
-// evita que uma resposta antiga (de uma query lenta) sobrescreva uma mais
-// recente caso o usuário mude o filtro rapidamente (race condition).
 let requestId = 0;
 
 async function renderAll(state) {
@@ -203,12 +198,6 @@ async function renderAll(state) {
     }
 }
 
-// *** NOVO: busca os listings da mesma cidade do imóvel selecionado e
-// atualiza o mapa de detalhe. `recenter` só é true quando a seleção
-// MUDOU desde a última vez (lastDetailMapListingId) — assim, se o
-// usuário já deu zoom/pan manual no mapa de detalhe e algum outro
-// filtro disparar um re-render (ex: moveu o brush da timeline), o
-// zoom/pan dele não é resetado à força; só uma seleção NOVA recentraliza.
 async function updateDetailMap(listing, filters, myRequest) {
     if (!listing || listing.latitude == null || listing.longitude == null) {
         detailMapView.reset();
@@ -239,9 +228,6 @@ async function main() {
     await loader.init();
     await loader.loadAirbnb();
 
-    // *** NOVO: popula o filtro de cidade com as cidades realmente
-    // presentes na amostra carregada (não hardcoded), depois que o banco
-    // já está pronto para ser consultado.
     const cities = await loader.listCities();
     buildCityChips(cities);
 
