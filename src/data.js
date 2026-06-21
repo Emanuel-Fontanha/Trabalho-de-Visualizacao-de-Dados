@@ -18,7 +18,7 @@ export const PRICE_BINS = [
 
 // Limite de pontos no mapa para evitar renderização excessiva e lag.
 export const MAX_MAP_POINTS_PER_CITY = 1000; // controla o número de pontos por cidade
-export const MAX_DETAIL_MAP_POINTS = 2000; // controla a riqueza de detalhes
+export const MAX_DETAIL_MAP_POINTS = 1000; // controla a riqueza de detalhes
 
 // Monta a cláusula WHERE compartilhada por (quase) todas as consultas, a
 // partir do objeto de filtros guardado em state.js.
@@ -159,7 +159,7 @@ async loadAirbnb(listingsPath = '/Airbnb Data/Listings.csv', reviewsPath = '/Air
               AND TRY_CAST(REPLACE(REPLACE(CAST(l.price AS VARCHAR), '$', ''), ',', '') AS DOUBLE) IS NOT NULL
               AND TRY_CAST(l.review_scores_rating AS DOUBLE) IS NOT NULL
         )
-        QUALIFY ROW_NUMBER() OVER (PARTITION BY city ORDER BY n_reviews DESC) <= 1000;
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY city ORDER BY n_reviews DESC) <= 3000;
     `);
 
     // Mantém só os reviews dos imóveis que sobraram em listings_clean —
@@ -242,7 +242,7 @@ async loadAirbnb(listingsPath = '/Airbnb Data/Listings.csv', reviewsPath = '/Air
             SELECT listing_id, name, city, neighbourhood, room_type, property_type,
                    latitude, longitude, price, price_usd, review_scores_rating
             FROM (
-                SELECT *, ROW_NUMBER() OVER (PARTITION BY city ORDER BY random()) AS rn
+                SELECT *, ROW_NUMBER() OVER (PARTITION BY city ORDER BY listing_id) AS rn
                 FROM listings_clean AS l
                 WHERE ${where}
             ) AS sampled
