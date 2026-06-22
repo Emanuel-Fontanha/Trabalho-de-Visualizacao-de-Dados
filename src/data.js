@@ -18,15 +18,7 @@ export const PRICE_BINS = [
 
 /* Limite de VOLUME DE DADOS: quantos imóveis por cidade ficam no banco depois da carga. 
    Diferente dos limites de RENDERIZAÇÃO abaixo — este roda uma vez só, no loadAirbnb(). */
-const DATA_LOAD_CAP_PER_CITY = 1000;
-
-/*  Limites de RENDERIZAÇÃO: quantos pontos cada mapa desenha por query.
-    MAX_MAP_POINTS_PER_CITY se multiplica pelo nº de cidades visíveis no 
-    mapa principal; MAX_DETAIL_MAP_POINTS é total, pois o mapa de detalhe
-    já mostra uma única cidade por vez. */
-export const MAX_MAP_POINTS_PER_CITY = 1000;
-export const MAX_DETAIL_MAP_POINTS = 1000;
-
+export const DATA_LOAD_CAP_PER_CITY = 1000;
 // Monta a cláusula WHERE compartilhada por (quase) todas as consultas, a
 // partir do objeto de filtros guardado em state.js.
 export function buildWhereClause(filters = {}) {
@@ -232,7 +224,7 @@ export class DataLoader {
                 FROM listings_clean AS l
                 WHERE ${where}
             ) AS sampled
-            WHERE rn <= ${MAX_MAP_POINTS_PER_CITY};
+            WHERE rn <= ${DATA_LOAD_CAP_PER_CITY};
         `;
         return this.query(sql);
     }
@@ -259,7 +251,7 @@ export class DataLoader {
                 )
                 ${hasSelection ? `OR l.listing_id = ${selectedId}` : ''}
             ) AS sampled
-            WHERE rn <= ${MAX_DETAIL_MAP_POINTS} OR is_selected;
+            WHERE rn <= ${DATA_LOAD_CAP_PER_CITY} OR is_selected;
         `;
         return this.query(sql);
     }
