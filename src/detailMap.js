@@ -27,7 +27,7 @@ export function createDetailMap(selector, { onSelect } = {}) {
             .style('top', `${event.clientY - rect.top + 10}px`)
             .html(`
                 <div style="font-family: sans-serif; line-height: 1.4;">
-                    <strong style="font-size: 13px; color: var(--ink);">${d.name ?? 'Sem nome'}</strong><br>
+                   <strong style="font-size: 13px; color: var(--accent-teal);">${d.name ?? 'Sem nome'}</strong><br>
                     <span style="font-size: 11px; color: #666;">
                         ${d.neighbourhood ?? '—'} • ${d.room_type ?? '—'}
                     </span><br>
