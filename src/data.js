@@ -115,67 +115,67 @@ export class DataLoader {
         // também pra ordenar os mapas depois (ver listingsForMap /
         // listingsInCity).
         await this.conn.query(`
-            CREATE OR REPLACE TABLE review_counts AS
-            SELECT TRY_CAST(listing_id AS BIGINT) AS listing_id, COUNT(*) AS n_reviews
-            FROM reviews_raw
-            WHERE TRY_CAST(listing_id AS BIGINT) IS NOT NULL
-            GROUP BY 1;
-        `);
-
-        // n_reviews fica como coluna normal em listings_clean (sem EXCLUDE)
-        // porque listingsForMap/listingsInCity precisam dela pra ordenar.
-        await this.conn.query(`
-            CREATE OR REPLACE TABLE listings_clean AS
-            SELECT * FROM (
-                SELECT
-                    l.listing_id,
-                    l.name,
-                    l.neighbourhood,
-                    l.district,
-                    l.city,
-                    l.property_type,
-                    l.room_type,
-                    l.accommodates,
-                    l.bedrooms,
-                    TRY_CAST(REPLACE(REPLACE(CAST(l.price AS VARCHAR), '$', ''), ',', '') AS DOUBLE) AS price,
-                    TRY_CAST(REPLACE(REPLACE(CAST(l.price AS VARCHAR), '$', ''), ',', '') AS DOUBLE) / CASE l.city
-                        WHEN 'Paris' THEN 0.825
-                        WHEN 'Rome' THEN 0.825
-                        WHEN 'New York' THEN 1.00
-                        WHEN 'Sydney' THEN 1.29
-                        WHEN 'Rio de Janeiro' THEN 5.40
-                        WHEN 'Istanbul' THEN 7.00
-                        WHEN 'Mexico City' THEN 20.0
-                        WHEN 'Bangkok' THEN 30.0
-                        WHEN 'Cape Town' THEN 14.8
-                        WHEN 'Hong Kong' THEN 7.75
-                        ELSE 1.00
-                    END AS price_usd,
-                    l.minimum_nights,
-                    l.maximum_nights,
-                    TRY_CAST(l.latitude AS DOUBLE) AS latitude,
-                    TRY_CAST(l.longitude AS DOUBLE) AS longitude,
-                    TRY_CAST(l.review_scores_rating AS DOUBLE) AS review_scores_rating,
-                    TRY_CAST(l.review_scores_accuracy AS DOUBLE) AS review_scores_accuracy,
-                    TRY_CAST(l.review_scores_cleanliness AS DOUBLE) AS review_scores_cleanliness,
-                    TRY_CAST(l.review_scores_checkin AS DOUBLE) AS review_scores_checkin,
-                    TRY_CAST(l.review_scores_communication AS DOUBLE) AS review_scores_communication,
-                    TRY_CAST(l.review_scores_location AS DOUBLE) AS review_scores_location,
-                    TRY_CAST(l.review_scores_value AS DOUBLE) AS review_scores_value,
-                    l.host_id,
-                    l.host_since,
-                    l.host_is_superhost,
-                    l.host_identity_verified,
-                    l.instant_bookable,
-                    COALESCE(rc.n_reviews, 0) AS n_reviews
-                FROM listings_raw AS l
-                LEFT JOIN review_counts AS rc ON rc.listing_id = TRY_CAST(l.listing_id AS BIGINT)
-                WHERE TRY_CAST(l.latitude AS DOUBLE) IS NOT NULL
-                  AND TRY_CAST(l.longitude AS DOUBLE) IS NOT NULL
-                  AND TRY_CAST(REPLACE(REPLACE(CAST(l.price AS VARCHAR), '$', ''), ',', '') AS DOUBLE) IS NOT NULL
-                  AND TRY_CAST(l.review_scores_rating AS DOUBLE) IS NOT NULL
+            CREATE OR REPLACE VIEW listings_clean AS
+            
+            -- 1. Cria uma tabela temporária com um nome de coluna EXCLUSIVO (rev_listing_id)
+            WITH contagem_reviews AS (
+                SELECT TRY_CAST(listing_id AS BIGINT) AS rev_listing_id, COUNT(*) AS total_reviews
+                FROM reviews_raw
+                GROUP BY 1
             )
-            QUALIFY ROW_NUMBER() OVER (PARTITION BY city ORDER BY n_reviews DESC) <= ${DATA_LOAD_CAP_PER_CITY};
+            
+            -- 2. Seleciona os imóveis e junta com a contagem
+            SELECT
+                l.listing_id,
+                l.name,
+                l.neighbourhood,
+                l.district,
+                l.city,
+                l.property_type,
+                l.room_type,
+                l.accommodates,
+                l.bedrooms,
+                TRY_CAST(REPLACE(REPLACE(CAST(l.price AS VARCHAR), '$', ''), ',', '') AS DOUBLE) AS price,
+                TRY_CAST(REPLACE(REPLACE(CAST(l.price AS VARCHAR), '$', ''), ',', '') AS DOUBLE) / CASE l.city
+                    WHEN 'Paris' THEN 0.825
+                    WHEN 'Rome' THEN 0.825
+                    WHEN 'New York' THEN 1.00
+                    WHEN 'Sydney' THEN 1.29
+                    WHEN 'Rio de Janeiro' THEN 5.40
+                    WHEN 'Istanbul' THEN 7.00
+                    WHEN 'Mexico City' THEN 20.0
+                    WHEN 'Bangkok' THEN 30.0
+                    WHEN 'Cape Town' THEN 14.8
+                    WHEN 'Hong Kong' THEN 7.75
+                    ELSE 1.00
+                END AS price_usd,
+                l.minimum_nights,
+                l.maximum_nights,
+                TRY_CAST(l.latitude AS DOUBLE) AS latitude,
+                TRY_CAST(l.longitude AS DOUBLE) AS longitude,
+                TRY_CAST(l.review_scores_rating AS DOUBLE) AS review_scores_rating,
+                TRY_CAST(l.review_scores_accuracy AS DOUBLE) AS review_scores_accuracy,
+                TRY_CAST(l.review_scores_cleanliness AS DOUBLE) AS review_scores_cleanliness,
+                TRY_CAST(l.review_scores_checkin AS DOUBLE) AS review_scores_checkin,
+                TRY_CAST(l.review_scores_communication AS DOUBLE) AS review_scores_communication,
+                TRY_CAST(l.review_scores_location AS DOUBLE) AS review_scores_location,
+                TRY_CAST(l.review_scores_value AS DOUBLE) AS review_scores_value,
+                
+                -- Se não tiver avaliação na tabela temporária, retorna 0
+                COALESCE(r.total_reviews, 0) AS number_of_reviews,
+
+                l.host_id,
+                l.host_since,
+                l.host_is_superhost,
+                l.host_identity_verified,
+                l.instant_bookable
+            FROM listings_raw AS l
+            
+            -- Faz o JOIN usando o nome exclusivo para não confundir o banco
+            LEFT JOIN contagem_reviews AS r ON TRY_CAST(l.listing_id AS BIGINT) = r.rev_listing_id
+            WHERE TRY_CAST(l.latitude AS DOUBLE) IS NOT NULL
+              AND TRY_CAST(l.longitude AS DOUBLE) IS NOT NULL
+              AND TRY_CAST(REPLACE(REPLACE(CAST(l.price AS VARCHAR), '$', ''), ',', '') AS DOUBLE) IS NOT NULL;
         `);
 
         // Mantém só os reviews dos imóveis que sobraram em listings_clean —
