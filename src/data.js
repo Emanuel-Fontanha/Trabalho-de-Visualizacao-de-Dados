@@ -97,11 +97,11 @@ export class DataLoader {
         await this.conn.query(`
             CREATE OR REPLACE VIEW listings_clean AS
             
-            -- 1. Cria uma tabela temporária apenas com a contagem de reviews
+            -- 1. Cria uma tabela temporária com um nome de coluna EXCLUSIVO (rev_listing_id)
             WITH contagem_reviews AS (
-                SELECT TRY_CAST(listing_id AS BIGINT) AS listing_id, COUNT(*) AS total_reviews
+                SELECT TRY_CAST(listing_id AS BIGINT) AS rev_listing_id, COUNT(*) AS total_reviews
                 FROM reviews_raw
-                GROUP BY TRY_CAST(listing_id AS BIGINT)
+                GROUP BY 1
             )
             
             -- 2. Seleciona os imóveis e junta com a contagem
@@ -150,7 +150,9 @@ export class DataLoader {
                 l.host_identity_verified,
                 l.instant_bookable
             FROM listings_raw AS l
-            LEFT JOIN contagem_reviews AS r ON TRY_CAST(l.listing_id AS BIGINT) = r.listing_id
+            
+            -- Faz o JOIN usando o nome exclusivo para não confundir o banco
+            LEFT JOIN contagem_reviews AS r ON TRY_CAST(l.listing_id AS BIGINT) = r.rev_listing_id
             WHERE TRY_CAST(l.latitude AS DOUBLE) IS NOT NULL
               AND TRY_CAST(l.longitude AS DOUBLE) IS NOT NULL
               AND TRY_CAST(REPLACE(REPLACE(CAST(l.price AS VARCHAR), '$', ''), ',', '') AS DOUBLE) IS NOT NULL;
