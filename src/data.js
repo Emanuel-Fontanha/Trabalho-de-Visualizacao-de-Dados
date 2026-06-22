@@ -102,12 +102,12 @@ export class DataLoader {
 
         await this.conn.query(`
             CREATE OR REPLACE TABLE listings_raw AS
-            SELECT * FROM read_csv_auto('Listings.csv', SAMPLE_SIZE=-1);
+            SELECT * FROM read_csv_auto('Listings.csv', SAMPLE_SIZE=-1, IGNORE_ERRORS=true);
         `);
 
         await this.conn.query(`
             CREATE OR REPLACE TABLE reviews_raw AS
-            SELECT * FROM read_csv_auto('Reviews.csv', SAMPLE_SIZE=-1);
+            SELECT * FROM read_csv_auto('Reviews.csv', SAMPLE_SIZE=-1, IGNORE_ERRORS=true);
         `);
 
         // Conta os reviews por imóvel ANTES de montar listings_clean — é o
@@ -115,7 +115,7 @@ export class DataLoader {
         // também pra ordenar os mapas depois (ver listingsForMap /
         // listingsInCity).
         await this.conn.query(`
-            CREATE OR REPLACE VIEW listings_clean AS
+            CREATE OR REPLACE TABLE listings_clean AS
             
             -- 1. Cria uma tabela temporária com um nome de coluna EXCLUSIVO (rev_listing_id)
             WITH contagem_reviews AS (
@@ -172,10 +172,12 @@ export class DataLoader {
             FROM listings_raw AS l
             
             -- Faz o JOIN usando o nome exclusivo para não confundir o banco
-            LEFT JOIN contagem_reviews AS r ON TRY_CAST(l.listing_id AS BIGINT) = r.rev_listing_id
+            INNER JOIN contagem_reviews AS r ON TRY_CAST(l.listing_id AS BIGINT) = r.rev_listing_id
             WHERE TRY_CAST(l.latitude AS DOUBLE) IS NOT NULL
               AND TRY_CAST(l.longitude AS DOUBLE) IS NOT NULL
-              AND TRY_CAST(REPLACE(REPLACE(CAST(l.price AS VARCHAR), '$', ''), ',', '') AS DOUBLE) IS NOT NULL;
+              AND TRY_CAST(REPLACE(REPLACE(CAST(l.price AS VARCHAR), '$', ''), ',', '') AS DOUBLE) IS NOT NULL
+              AND TRY_CAST(l.review_scores_rating AS DOUBLE) IS NOT NULL
+            QUALIFY ROW_NUMBER() OVER (PARTITION BY l.city ORDER BY random()) <= ${MAX_MAP_POINTS_PER_CITY};
         `);
 
         // Mantém só os reviews dos imóveis que sobraram em listings_clean —
