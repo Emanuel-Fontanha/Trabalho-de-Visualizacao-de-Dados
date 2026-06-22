@@ -102,12 +102,12 @@ export class DataLoader {
 
         await this.conn.query(`
             CREATE OR REPLACE TABLE listings_raw AS
-            SELECT * FROM read_csv_auto('Listings.csv', SAMPLE_SIZE=-1, IGNORE_ERRORS=true);
+            SELECT * FROM read_csv_auto('Listings.csv', SAMPLE_SIZE=-1);
         `);
 
         await this.conn.query(`
             CREATE OR REPLACE TABLE reviews_raw AS
-            SELECT * FROM read_csv_auto('Reviews.csv', SAMPLE_SIZE=-1, IGNORE_ERRORS=true);
+            SELECT * FROM read_csv_auto('Reviews.csv', SAMPLE_SIZE=-1);
         `);
 
         // Conta os reviews por imóvel ANTES de montar listings_clean — é o
