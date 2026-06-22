@@ -16,16 +16,14 @@ export const PRICE_BINS = [
     { min: 700, max: Infinity, label: '700+' },
 ];
 
-// Limite de VOLUME DE DADOS: quantos imóveis por cidade ficam no banco
-// depois da carga (decisão original: 3000/cidade, priorizando quem tem
-// mais avaliações). Diferente dos limites de RENDERIZAÇÃO abaixo — este
-// roda uma vez só, no loadAirbnb().
+/* Limite de VOLUME DE DADOS: quantos imóveis por cidade ficam no banco depois da carga. 
+   Diferente dos limites de RENDERIZAÇÃO abaixo — este roda uma vez só, no loadAirbnb(). */
 const DATA_LOAD_CAP_PER_CITY = 3000;
 
-// Limites de RENDERIZAÇÃO: quantos pontos cada mapa desenha por query.
-// MAX_MAP_POINTS_PER_CITY se multiplica pelo nº de cidades visíveis no
-// mapa principal; MAX_DETAIL_MAP_POINTS é total, pois o mapa de detalhe
-// já mostra uma única cidade por vez.
+/*  Limites de RENDERIZAÇÃO: quantos pontos cada mapa desenha por query.
+    MAX_MAP_POINTS_PER_CITY se multiplica pelo nº de cidades visíveis no 
+    mapa principal; MAX_DETAIL_MAP_POINTS é total, pois o mapa de detalhe
+    já mostra uma única cidade por vez. */
 export const MAX_MAP_POINTS_PER_CITY = 1000;
 export const MAX_DETAIL_MAP_POINTS = 1000;
 
@@ -199,21 +197,6 @@ export class DataLoader {
         await this.conn.query(`DROP TABLE review_counts;`);
     }
 
-    // *** REMOVIDO: fixEncoding() ***
-    // Existia uma função aqui que tentava corrigir "mojibake" usando
-    // decodeURIComponent(escape(str)) com fallback de cortar caracteres
-    // até parar de dar erro. O problema: escape()/decodeURIComponent()
-    // assumem Latin-1, não UTF-8 — qualquer string que já estivesse
-    // CORRETAMENTE acentuada em UTF-8 (que é o caso de toda a amostra
-    // gerada para este projeto, conferido diretamente nos CSVs) quebrava
-    // ao passar por essa função: "São Paulo" virava só "S", porque o
-    // primeiro caractere acentuado gerava um erro de "URI malformed", e
-    // o fallback ia cortando o FINAL da string até o erro parar de
-    // acontecer — o que, na prática, descartava quase tudo. Removida
-    // porque (1) os dados já estão corretos em UTF-8 nesta amostra, e
-    // (2) mesmo se não estivessem, essa técnica específica não era seguro
-    // o suficiente para aplicar indiscriminadamente em qualquer string.
-
     // Executa SQL arbitrário e devolve um array de objetos JS simples.
     async query(sql) {
         if (!this.db || !this.conn) throw new Error('Banco não inicializado. Chame init() primeiro.');
@@ -233,26 +216,30 @@ export class DataLoader {
 
     // --- Consultas usadas pelas views coordenadas -------------------------
 
+    // Limita o número de pontos por cidade (ver DATA_LOAD_CAP_PER_CITY) 
     async listingsForMap(filters = {}) {
-    const where = buildWhereClause({ 
-        cities: filters.cities, 
-        priceRange: filters.priceRange, 
-        dateRange: filters.dateRange,
-        ratingRange: filters.ratingRange
-    });
-    const sql = `
-        SELECT listing_id, name, city, neighbourhood, room_type, property_type,
-               latitude, longitude, price, price_usd, review_scores_rating
-        FROM (
-            SELECT *, ROW_NUMBER() OVER (PARTITION BY city ORDER BY n_reviews DESC) AS rn
-            FROM listings_clean AS l
-            WHERE ${where}
-        ) AS sampled
-        WHERE rn <= ${MAX_MAP_POINTS_PER_CITY};
-    `;
-    return this.query(sql);
-}
+        const where = buildWhereClause({ 
+            cities: filters.cities, 
+            priceRange: filters.priceRange, 
+            dateRange: filters.dateRange,
+            ratingRange: filters.ratingRange
+        });
+        const sql = `
+            SELECT listing_id, name, city, neighbourhood, room_type, property_type,
+                latitude, longitude, price, price_usd, review_scores_rating
+            FROM (
+                SELECT *, ROW_NUMBER() OVER (PARTITION BY city ORDER BY n_reviews DESC) AS rn
+                FROM listings_clean AS l
+                WHERE ${where}
+            ) AS sampled
+            WHERE rn <= ${MAX_MAP_POINTS_PER_CITY};
+        `;
+        return this.query(sql);
+    }
 
+    // query para os pontos do mapa de detalhe, depois de aplicar os filtros. 
+    // Se o filtro de cidade tiver mais de MAX_MAP_POINTS_PER_CITY imóveis, ele continua limitando por cidade (como em listingsForMap) mas garantindo que o imóvel 
+    // selecionado pelo usuário esteja entre eles (ver a lógica de is_selected e ORDER BY n_reviews DESC, is_selected DESC). Se o filtro de cidade tiver menos de MAX_MAP_POINTS_PER_CITY imóveis, ele mostra todos (sem limite).
     async listingsInCity(city, filters = {}, selectedListingId = null) {
         const baseWhere = buildWhereClause({ ...filters, cities: [city] });
         const hasSelection = selectedListingId != null;
@@ -277,6 +264,7 @@ export class DataLoader {
         return this.query(sql);
     }
 
+    // query para o histograma de preços, depois de aplicar os filtros. Agrupa por faixas de preço (definidas em PRICE_BINS) e tipo de quarto (room_type).
     async priceHistogram(filters = {}) {
         const where = buildWhereClause({ 
             cities: filters.cities, 
@@ -303,24 +291,27 @@ export class DataLoader {
         return this.query(sql);
     }
 
+    // query para a série temporal de reviews por mês, depois de aplicar os filtros (exceto o filtro de tempo, que é o que queremos analisar aqui). O resultado tem que ser mensal (não diário) para fazer sentido no zoom da timeline.
     async reviewsTimeSeries(filters = {}) {
-    const where = buildWhereClause({ 
-        cities: filters.cities, 
-        priceRange: filters.priceRange, 
-        bbox: filters.bbox,
-        ratingRange: filters.ratingRange
-    });
-    const sql = `
-        SELECT strftime(r.date_parsed, '%Y-%m') AS month, COUNT(*) AS n_reviews
-        FROM reviews_clean AS r
-        JOIN listings_clean AS l ON l.listing_id = r.listing_id
-        WHERE r.date_parsed IS NOT NULL AND ${where}
-        GROUP BY month
-        ORDER BY month;
-    `;
-    return this.query(sql);
-}
+        const where = buildWhereClause({ 
+            cities: filters.cities, 
+            priceRange: filters.priceRange, 
+            bbox: filters.bbox,
+            ratingRange: filters.ratingRange
+        });
+        const sql = `
+            SELECT strftime(r.date_parsed, '%Y-%m') AS month, COUNT(*) AS n_reviews
+            FROM reviews_clean AS r
+            JOIN listings_clean AS l ON l.listing_id = r.listing_id
+            WHERE r.date_parsed IS NOT NULL AND ${where}
+            GROUP BY month
+            ORDER BY month;
+        `;
+        return this.query(sql);
+    }
 
+
+    // query para a série temporal de reviews por rating (e.g. quantos reviews de cada rating cada mês), similar à reviewsTimeSeries mas agrupando por faixas de rating (e.g. 0–2, 2–4, 4–6, 6–8, 8–10).
     async summaryStats(filters = {}) {
         const where = buildWhereClause(filters);
         const sql = `
@@ -334,6 +325,7 @@ export class DataLoader {
         return rows[0];
     }
 
+    // query para o ranking de bairros por número de imóveis (e.g. top 5 bairros com mais imóveis disponíveis, depois de aplicar os filtros).
     async topNeighbourhoods(filters = {}, limit = 5) {
         const where = buildWhereClause(filters);
         const sql = `
@@ -347,6 +339,7 @@ export class DataLoader {
         return this.query(sql);
     }
 
+    // query para listar as cidades disponíveis (para popular o dropdown de filtro de cidade).
     async listCities() {
         const sql = `
             SELECT city, COUNT(*) AS n
@@ -358,6 +351,7 @@ export class DataLoader {
         return this.query(sql);
     }
 
+    // query para os detalhes de um imóvel específico, dado seu listing_id. Usado para popular o painel de detalhes quando o usuário clica num ponto do mapa.
     async listingDetails(listingId) {
         const sql = `
             SELECT *
