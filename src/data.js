@@ -18,7 +18,7 @@ export const PRICE_BINS = [
 
 /* Limite de VOLUME DE DADOS: quantos imóveis por cidade ficam no banco depois da carga. 
    Diferente dos limites de RENDERIZAÇÃO abaixo — este roda uma vez só, no loadAirbnb(). */
-const DATA_LOAD_CAP_PER_CITY = 3000;
+const DATA_LOAD_CAP_PER_CITY = 1000;
 
 /*  Limites de RENDERIZAÇÃO: quantos pontos cada mapa desenha por query.
     MAX_MAP_POINTS_PER_CITY se multiplica pelo nº de cidades visíveis no 
@@ -167,7 +167,7 @@ export class DataLoader {
                     l.host_is_superhost,
                     l.host_identity_verified,
                     l.instant_bookable,
-                    COALESCE(rc.n_reviews, 0) AS n_reviews
+                    COALESCE(rc.n_reviews, 0) AS number_of_reviews,
                 FROM listings_raw AS l
                 LEFT JOIN review_counts AS rc ON rc.listing_id = TRY_CAST(l.listing_id AS BIGINT)
                 WHERE TRY_CAST(l.latitude AS DOUBLE) IS NOT NULL
@@ -175,7 +175,7 @@ export class DataLoader {
                   AND TRY_CAST(REPLACE(REPLACE(CAST(l.price AS VARCHAR), '$', ''), ',', '') AS DOUBLE) IS NOT NULL
                   AND TRY_CAST(l.review_scores_rating AS DOUBLE) IS NOT NULL
             )
-            QUALIFY ROW_NUMBER() OVER (PARTITION BY city ORDER BY n_reviews DESC) <= ${DATA_LOAD_CAP_PER_CITY};
+            QUALIFY ROW_NUMBER() OVER (PARTITION BY city ORDER BY number_of_reviews DESC) <= ${DATA_LOAD_CAP_PER_CITY};
         `);
 
         // Mantém só os reviews dos imóveis que sobraram em listings_clean —
@@ -226,9 +226,9 @@ export class DataLoader {
         });
         const sql = `
             SELECT listing_id, name, city, neighbourhood, room_type, property_type,
-                latitude, longitude, price, price_usd, review_scores_rating
+                latitude, longitude, price, price_usd, review_scores_rating, number_of_reviews
             FROM (
-                SELECT *, ROW_NUMBER() OVER (PARTITION BY city ORDER BY n_reviews DESC) AS rn
+                SELECT *, ROW_NUMBER() OVER (PARTITION BY city ORDER BY number_of_reviews DESC) AS rn
                 FROM listings_clean AS l
                 WHERE ${where}
             ) AS sampled
@@ -247,11 +247,11 @@ export class DataLoader {
 
         const sql = `
             SELECT listing_id, name, city, neighbourhood, room_type, property_type,
-                latitude, longitude, price_usd, review_scores_rating
+                latitude, longitude, price_usd, review_scores_rating, number_of_reviews
             FROM (
                 SELECT *,
                     (${hasSelection ? `l.listing_id = ${selectedId}` : 'FALSE'}) AS is_selected,
-                    ROW_NUMBER() OVER (ORDER BY n_reviews DESC) AS rn
+                    ROW_NUMBER() OVER (ORDER BY number_of_reviews DESC) AS rn
                 FROM listings_clean AS l
                 WHERE (
                     (${baseWhere})
