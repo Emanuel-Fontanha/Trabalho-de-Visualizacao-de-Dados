@@ -1,5 +1,6 @@
 import * as d3 from 'd3';
 
+// Cria o mapa de detalhe (zoom) para um imóvel selecionado, com suporte a seleção e tooltip
 export function createDetailMap(selector, { onSelect } = {}) {
     const svg = d3.select(selector);
     const width = +svg.attr('width');
@@ -19,6 +20,9 @@ export function createDetailMap(selector, { onSelect } = {}) {
     const panel = svg.node().closest('.panel') || svg.node().parentNode;
     const tip = d3.select(panel).append('div').attr('class', 'tooltip').style('opacity', 0);
 
+
+    // --- Funções auxiliares para tooltip ---------------------------------
+    // Mostra tooltip com detalhes do imóvel
     function showTooltip(d, event) {
         if (!d) return hideTooltip();
         const rect = panel.getBoundingClientRect();
@@ -40,6 +44,7 @@ export function createDetailMap(selector, { onSelect } = {}) {
             `);
     }
     
+    // Esconde a tooltip
     function hideTooltip() {
         tip.style('opacity', 0);
     }
@@ -56,6 +61,7 @@ export function createDetailMap(selector, { onSelect } = {}) {
 
     let currentCity = null;
 
+    // Centraliza o zoom no ponto (px, py) com a escala especificada
     function centerOn(px, py, scale = 3.8) {
         const t = d3.zoomIdentity
             .translate(width / 2, height / 2)
@@ -64,6 +70,7 @@ export function createDetailMap(selector, { onSelect } = {}) {
         svg.transition().duration(500).call(zoom.transform, t);
     }
 
+    // Desenha o "terreno" (polígono) ao redor dos pontos, com base na envoltória convexa
     function drawTerrain(points) {
         terrainG.selectAll('*').remove();
         if (points.length < 3) return;
@@ -90,6 +97,7 @@ export function createDetailMap(selector, { onSelect } = {}) {
     // *** AQUI: Mesma escala de cor de avaliação (verde/laranja) do mapa principal ***
     const ratingColorScale = d3.scaleSequential((t) => d3.interpolateHcl('#1f6e72', '#e8714a')(t));
 
+    // Atualiza os pontos no mapa de detalhe, com base nos dados filtrados (chamado pelo main.js)
     function update(points, selectedId, recenter) {
         const valid = (points || []).filter((d) => d.longitude != null && d.latitude != null);
 
@@ -166,7 +174,8 @@ export function createDetailMap(selector, { onSelect } = {}) {
             if (recenter || cityChanged) centerOn(sx, sy);
         }
     }
-
+    
+    // Reseta o mapa de detalhe, limpando todos os elementos e voltando ao estado inicial
     function reset() {
         terrainG.selectAll('*').remove();
         pointsG.selectAll('*').remove();

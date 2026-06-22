@@ -9,6 +9,7 @@ const ROOM_COLORS = {
     'Hotel room': '#7A98A0', // tom neutro, categoria rara na amostra
 };
 
+// Cria o gráfico de histograma de preços, com barras empilhadas por tipo de quarto
 export function createHistogram(selector, { onBarClick } = {}) {
     const svg = d3.select(selector);
     const width = +svg.attr('width');

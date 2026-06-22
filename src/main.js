@@ -22,15 +22,20 @@ const clearBtn = document.querySelector('#clear-filters');
 const activeFilterCountEl = document.querySelector('#active-filter-count');
 const cityFilterEl = document.querySelector('#city-filter');
 
+/// --- CRIAÇÃO DAS VIEWS ---
+
+/// Cria o mapa principal, com pontos e brush
 const mapView = createMap('#map', {
     onSelect: (d) => setSelection(d.listing_id),
     onBrush: (bbox) => updateFilters({ bbox }),
 });
 
+// Cria a timeline de avaliações, com brush para filtrar por período
 const timelineView = createTimeline('#timeline-chart', {
     onBrush: (range) => updateFilters({ dateRange: range }),
 });
 
+// Cria o histograma de preços, com barras clicáveis para filtrar por faixa de preço
 const histogramView = createHistogram('#histogram-chart', {
     onBarClick: (binLabel) => {
         const bin = PRICE_BINS.find((b) => b.label === binLabel);
@@ -43,11 +48,13 @@ const histogramView = createHistogram('#histogram-chart', {
     },
 });
 
+// Cria o mapa de detalhe, que mostra apenas os imóveis da mesma cidade do selecionado
 const detailMapView = createDetailMap('#detail-map', {
     onSelect: (d) => setSelection(d.listing_id)
 });
 let lastDetailMapListingId = null; // evita recentralizar o zoom em todo re-render do MESMO imóvel
 
+// Função auxiliar para determinar qual bin de preço está ativo, com base no filtro atual
 function activeBinLabel(filters) {
     if (!filters.priceRange) return null;
     const [min, max] = filters.priceRange;
@@ -56,6 +63,10 @@ function activeBinLabel(filters) {
 }
 
 const selectedCities = new Set();
+
+// --- FUNÇÕES AUXILIARES DE INTERAÇÃO COM FILTROS ---
+
+// Constrói os chips de cidade com base na lista de cidades e no número de imóveis em cada uma
 function buildCityChips(cities) {
     if (!cityFilterEl) return;
     cityFilterEl.innerHTML = '';
@@ -77,6 +88,7 @@ function buildCityChips(cities) {
     });
 }
 
+// Limpa todos os chips de cidade e remove o filtro de cidades
 function clearCityChips() {
     selectedCities.clear();
     cityFilterEl?.querySelectorAll('.city-chip.active').forEach((el) => el.classList.remove('active'));
@@ -85,6 +97,7 @@ function clearCityChips() {
 const clearBtnDefaultText = clearBtn ? clearBtn.textContent : '';
 let clearFeedbackTimeout = null;
 
+// Mostra um feedback visual temporário no botão "Limpar filtros" quando ele é clicado
 function showClearFeedback() {
     if (!clearBtn) return;
     clearTimeout(clearFeedbackTimeout);
@@ -96,6 +109,7 @@ function showClearFeedback() {
     }, 1100);
 }
 
+// Conta quantos filtros estão ativos, incluindo o filtro de avaliação
 function countActiveFilters(filters) {
     let n = 0;
     if (filters.cities && filters.cities.length > 0) n++;
@@ -106,6 +120,7 @@ function countActiveFilters(filters) {
     return n;
 }
 
+// Atualiza o contador de filtros ativos no botão "Limpar filtros"
 function updateActiveFilterCount(filters) {
     if (!activeFilterCountEl) return;
     const n = countActiveFilters(filters);
@@ -118,6 +133,7 @@ function updateActiveFilterCount(filters) {
     }
 }
 
+// Atualiza o texto de status com base no número de imóveis no filtro atual
 function formatStatus(summary) {
     if (!statusEl) return;
     const n = summary?.n_listings ?? 0;
@@ -126,6 +142,7 @@ function formatStatus(summary) {
 
 let requestId = 0;
 
+// Renderiza todas as views com base no estado atual, incluindo filtros e seleção de imóvel
 async function renderAll(state) {
     const myRequest = ++requestId;
     const { filters, selection } = state;
@@ -160,6 +177,7 @@ async function renderAll(state) {
     }
 }
 
+// Atualiza o mapa de detalhe com base no imóvel selecionado e nos filtros atuais
 async function updateDetailMap(listing, filters, myRequest) {
     if (!listing || listing.latitude == null || listing.longitude == null) {
         detailMapView.reset();
@@ -176,6 +194,7 @@ async function updateDetailMap(listing, filters, myRequest) {
 
 // --- LÓGICA DOS SLIDERS DE RATING ---
 
+// Atualiza o filtro de avaliação com base nos valores dos sliders, garantindo que o mínimo não seja maior que o máximo
 function handleRatingChange() {
     const minVal = Number(ratingMinEl.value);
     const maxVal = Number(ratingMaxEl.value);
@@ -211,6 +230,8 @@ ratingMinEl?.addEventListener('change', handleRatingChange);
 ratingMaxEl?.addEventListener('change', handleRatingChange);
 
 // --- LÓGICA DO BOTÃO LIMPAR FILTROS ---
+
+// Limpa todos os filtros, incluindo sliders, chips de cidade e brushes, e mostra um feedback visual temporário
 clearBtn?.addEventListener('click', () => {
     mapView.clearBrush();
     timelineView.clearBrush();
@@ -230,22 +251,32 @@ clearBtn?.addEventListener('click', () => {
     showClearFeedback();
 });
 
+// --- FUNÇÃO PRINCIPAL DE INICIALIZAÇÃO ---
 async function main() {
+    // Inicializa a aplicação, carrega os dados e renderiza todas as views
     subscribe(renderAll);
 
+    // Inicializa o loader e carrega os dados do Airbnb
     await loader.init();
     await loader.loadAirbnb();
 
+    // Carrega a lista de cidades e constrói os chips de filtro
     const cities = await loader.listCities();
     buildCityChips(cities);
 
+    // Atualiza o estado inicial com os filtros padrão (sem filtros)
     if (loadingEl) loadingEl.style.display = 'none';
 
+    // Renderiza todas as views com base no estado inicial
     await renderAll(getState());
 
+    // Exibe o painel de detalhes (visão geral ou detalhes do imóvel) com base na seleção atual
     window.loader = loader;
 }
 
+// --- INICIALIZAÇÃO AO CARREGAR A PÁGINA ---
+
+// Adiciona um listener para o evento DOMContentLoaded, que chama a função main() quando a página estiver pronta
 window.addEventListener('DOMContentLoaded', () => {
     main().catch((err) => {
         console.error(err);

@@ -1,6 +1,7 @@
 const fmtUSD = (v) => (v == null || isNaN(v) ? '—' : `US$ ${Math.round(v).toLocaleString('pt-BR')}`);
 const fmtNum = (v, digits = 1) => (v == null || isNaN(v) ? '—' : Number(v).toFixed(digits));
 
+// Renderiza a barra de pontuação para cada categoria de avaliação
 function scoreBar(label, value) {
     const pct = value == null ? 0 : Math.max(0, Math.min(100, (value / 10) * 100));
     return `
@@ -12,6 +13,7 @@ function scoreBar(label, value) {
     `;
 }
 
+// Renderiza a visão geral do mapa, incluindo estatísticas e lista de bairros
 export function renderOverview(container, { summary, neighbourhoods }) {
     const maxN = Math.max(1, ...(neighbourhoods || []).map((n) => n.n_listings));
     const rows = (neighbourhoods || [])
@@ -39,6 +41,7 @@ export function renderOverview(container, { summary, neighbourhoods }) {
     `;
 }
 
+// Renderiza os detalhes de um imóvel selecionado, incluindo informações, estatísticas e avaliações
 export function renderListing(container, listing, { onClose } = {}) {
     if (!listing) {
         container.innerHTML = '<p class="muted">Imóvel não encontrado.</p>';

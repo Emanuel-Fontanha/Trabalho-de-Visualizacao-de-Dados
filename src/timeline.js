@@ -1,5 +1,10 @@
 import * as d3 from 'd3';
 
+// --- FUNÇÃO PARA CRIAR A TIMELINE ---
+
+// A timeline é um gráfico de área/linha que mostra a quantidade de reviews por mês.
+// Permite selecionar um intervalo de datas (brush) e aplicar um filtro global.
+// Também permite zoom visual para o intervalo selecionado, com botão de reset.
 export function createTimeline(selector, { onBrush, onZoomChange } = {}) {
     const svg = d3.select(selector);
     const width = +svg.attr('width');
@@ -89,6 +94,8 @@ export function createTimeline(selector, { onBrush, onZoomChange } = {}) {
     // sempre incluído. Isso também melhora a UX: o zoom passa a sempre
     // "encaixar" em meses completos, em vez de cortar visualmente um mês
     // pela metade.
+
+    // Retorna um domínio [start, end] arredondado para o mês mais próximo
     function monthAlignedDomain([start, end]) {
         return [d3.timeMonth.floor(start), d3.timeMonth.ceil(end)];
     }

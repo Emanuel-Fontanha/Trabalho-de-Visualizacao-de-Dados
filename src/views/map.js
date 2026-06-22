@@ -8,6 +8,7 @@ const CITY_ORDER = [
 const GRID_COLS = 5;
 const GRID_ROWS = 2;
 
+// Cria o mapa de pontos para cada cidade, com suporte a seleção e brush
 export function createMap(selector, { onSelect, onBrush } = {}) {
     const svg = d3.select(selector);
     const width = +svg.attr('width');
@@ -35,6 +36,7 @@ export function createMap(selector, { onSelect, onBrush } = {}) {
     const panel = svg.node().closest('.panel') || svg.node().parentNode;
     const tip = d3.select(panel).append('div').attr('class', 'tooltip').style('opacity', 0);
 
+    // --- Funções auxiliares para tooltip ---------------------------------
     function showTooltip(d, event) {
         if (!d) return hideTooltip();
         const rect = panel.getBoundingClientRect();
@@ -87,6 +89,7 @@ export function createMap(selector, { onSelect, onBrush } = {}) {
 
         const state = { quadtree: null, lastData: [] };
 
+        // Função chamada quando o brush é finalizado (ao soltar o mouse) - Delimita uma área de seleção no mapa
         function brushed(event) {
             const sel = event.selection;
             if (!sel) {
@@ -121,10 +124,12 @@ export function createMap(selector, { onSelect, onBrush } = {}) {
         return { city, x, y, pointsG, brushG, brush, state };
     });
 
+    // Limpa todos os brushes (chamado pelo main.js quando o filtro global é limpo)
     function clearBrush() {
         cells.forEach((c) => c.brushG.call(c.brush.move, null));
     }
 
+    // Atualiza os pontos no mapa, com base nos dados filtrados (chamado pelo main.js)
     function update(data, highlightedId = null) {
         const all = (data || []).filter((d) => d.longitude != null && d.latitude != null);
         const ratings = all.map((d) => +d.review_scores_rating).filter((v) => !isNaN(v));
