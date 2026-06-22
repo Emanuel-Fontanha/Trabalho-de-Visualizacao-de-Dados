@@ -17,13 +17,8 @@ export const PRICE_BINS = [
 ];
 
 // Limite de pontos no mapa para evitar renderização excessiva e lag.
-<<<<<<< Updated upstream
-export const MAX_MAP_POINTS_PER_CITY = 5000; // controla o número de pontos por cidade
-export const MAX_DETAIL_MAP_POINTS = 2500; // controla a riqueza de detalhes
-=======
 export const MAX_MAP_POINTS_PER_CITY = 1000; // controla o número de pontos por cidade
 export const MAX_DETAIL_MAP_POINTS = 850; // controla a riqueza de detalhes
->>>>>>> Stashed changes
 
 // Monta a cláusula WHERE compartilhada por (quase) todas as consultas, a
 // partir do objeto de filtros guardado em state.js.
@@ -100,7 +95,7 @@ export class DataLoader {
         `);
 
         await this.conn.query(`
-            CREATE OR REPLACE VIEW listings_clean AS
+            CREATE OR REPLACE TABLE listings_clean AS
             
             -- 1. Cria uma tabela temporária com um nome de coluna EXCLUSIVO (rev_listing_id)
             WITH contagem_reviews AS (
@@ -157,14 +152,16 @@ export class DataLoader {
             FROM listings_raw AS l
             
             -- Faz o JOIN usando o nome exclusivo para não confundir o banco
-            LEFT JOIN contagem_reviews AS r ON TRY_CAST(l.listing_id AS BIGINT) = r.rev_listing_id
+            INNER JOIN contagem_reviews AS r ON TRY_CAST(l.listing_id AS BIGINT) = r.rev_listing_id
             WHERE TRY_CAST(l.latitude AS DOUBLE) IS NOT NULL
               AND TRY_CAST(l.longitude AS DOUBLE) IS NOT NULL
-              AND TRY_CAST(REPLACE(REPLACE(CAST(l.price AS VARCHAR), '$', ''), ',', '') AS DOUBLE) IS NOT NULL;
+              AND TRY_CAST(REPLACE(REPLACE(CAST(l.price AS VARCHAR), '$', ''), ',', '') AS DOUBLE) IS NOT NULL
+              AND TRY_CAST(l.review_scores_rating AS DOUBLE) IS NOT NULL
+            QUALIFY ROW_NUMBER() OVER (PARTITION BY l.city ORDER BY random()) <= ${MAX_MAP_POINTS_PER_CITY};
         `);
 
         await this.conn.query(`
-            CREATE OR REPLACE VIEW reviews_clean AS
+            CREATE OR REPLACE TABLE reviews_clean AS
             SELECT
                 TRY_CAST(listing_id AS BIGINT) AS listing_id,
                 review_id,
