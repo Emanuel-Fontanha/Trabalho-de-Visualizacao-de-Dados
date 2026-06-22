@@ -4,7 +4,7 @@ export function createTimeline(selector, { onBrush, onZoomChange } = {}) {
     const svg = d3.select(selector);
     const width = +svg.attr('width');
     const height = +svg.attr('height');
-    const margin = { top: 10, right: 16, bottom: 24, left: 40 };
+    const margin = { top: 10, right: 16, bottom: 24, left: 60 };
     const innerW = width - margin.left - margin.right;
     const innerH = height - margin.top - margin.bottom;
 
@@ -12,7 +12,14 @@ export function createTimeline(selector, { onBrush, onZoomChange } = {}) {
     const areaG = g.append('g').attr('class', 'area');
     const axisX = g.append('g').attr('class', 'axis axis-x').attr('transform', `translate(0,${innerH})`);
     const axisY = g.append('g').attr('class', 'axis axis-y');
-
+    g.append('text')
+        .attr('transform', 'rotate(-90)') 
+        .attr('y', -margin.left + 12)  
+        .attr('x', -(innerH / 2))     
+        .attr('text-anchor', 'middle')   
+        .attr('font-size', '11px')
+        .attr('fill', '#666')
+        .text('Quantidade de Reviews');
     const x = d3.scaleTime().range([0, innerW]);
     const y = d3.scaleLinear().range([innerH, 0]);
     const parseMonth = d3.timeParse('%Y-%m');
