@@ -17,8 +17,13 @@ export const PRICE_BINS = [
 ];
 
 // Limite de pontos no mapa para evitar renderização excessiva e lag.
+<<<<<<< Updated upstream
 export const MAX_MAP_POINTS_PER_CITY = 5000; // controla o número de pontos por cidade
 export const MAX_DETAIL_MAP_POINTS = 2500; // controla a riqueza de detalhes
+=======
+export const MAX_MAP_POINTS_PER_CITY = 1000; // controla o número de pontos por cidade
+export const MAX_DETAIL_MAP_POINTS = 850; // controla a riqueza de detalhes
+>>>>>>> Stashed changes
 
 // Monta a cláusula WHERE compartilhada por (quase) todas as consultas, a
 // partir do objeto de filtros guardado em state.js.
@@ -86,12 +91,12 @@ export class DataLoader {
 
         await this.conn.query(`
             CREATE OR REPLACE TABLE listings_raw AS
-            SELECT * FROM read_csv_auto('Listings.csv', SAMPLE_SIZE=-1);
+            SELECT * FROM read_csv_auto('Listings.csv', SAMPLE_SIZE=-1, IGNORE_ERRORS=true);
         `);
 
         await this.conn.query(`
             CREATE OR REPLACE TABLE reviews_raw AS
-            SELECT * FROM read_csv_auto('Reviews.csv', SAMPLE_SIZE=-1);
+            SELECT * FROM read_csv_auto('Reviews.csv', SAMPLE_SIZE=-1, IGNORE_ERRORS=true);
         `);
 
         await this.conn.query(`
