@@ -196,7 +196,6 @@ export class DataLoader {
 
         await this.conn.query(`DROP TABLE listings_raw;`);
         await this.conn.query(`DROP TABLE reviews_raw;`);
-        await this.conn.query(`DROP TABLE review_counts;`);
     }
 
     // Executa SQL arbitrário e devolve um array de objetos JS simples.

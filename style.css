@@ -167,19 +167,19 @@ svg {
 .back-btn { background: none; border: none; color: #2F9E96; cursor: pointer; font-size: 12px; padding: 0 0 8px; }
 .muted { color: #888; font-size: 12px; }
 
-/* --- Legenda do Histograma --- */
 .histogram-legend {
     display: flex;
     justify-content: center;
-    gap: 20px;
+    gap: 12px;
     margin-top: -5px;
     margin-bottom: 8px;
+    flex-wrap: wrap;
 }
 
 .legend-item {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
 }
 
 .legend-color {
@@ -189,13 +189,10 @@ svg {
     display: inline-block;
 }
 
-.legend-color.private-room {
-    background-color: #E8714A; /* Laranja usado nas notas */
-}
-
-.legend-color.entire-home {
-    background-color: #2F9E96; /* Verde/Teal principal */
-}
+.legend-color.entire-home { background-color: #2F9E96; }
+.legend-color.private-room { background-color: #E8714A; }
+.legend-color.shared-room { background-color: #D9A86C; }
+.legend-color.hotel-room { background-color: #7A98A0; }
 
 .legend-text {
     font-size: 11px;
