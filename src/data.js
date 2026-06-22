@@ -229,7 +229,7 @@ export class DataLoader {
             SELECT listing_id, name, city, neighbourhood, room_type, property_type,
                 latitude, longitude, price, price_usd, review_scores_rating
             FROM (
-                SELECT *, ROW_NUMBER() OVER (PARTITION BY city ORDER BY n_reviews DESC) AS rn
+                SELECT *, ROW_NUMBER() OVER (PARTITION BY city ORDER BY number_of_reviews DESC) AS rn
                 FROM listings_clean AS l
                 WHERE ${where}
             ) AS sampled
@@ -252,7 +252,7 @@ export class DataLoader {
             FROM (
                 SELECT *,
                     (${hasSelection ? `l.listing_id = ${selectedId}` : 'FALSE'}) AS is_selected,
-                    ROW_NUMBER() OVER (ORDER BY n_reviews DESC) AS rn
+                    ROW_NUMBER() OVER (ORDER BY number_of_reviews DESC) AS rn
                 FROM listings_clean AS l
                 WHERE (
                     (${baseWhere})
