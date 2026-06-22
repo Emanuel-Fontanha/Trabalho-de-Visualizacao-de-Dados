@@ -243,13 +243,12 @@ async function main() {
 
     await renderAll(getState());
 
-    // Exposto para depuração no console (não usado pela UI).
     window.loader = loader;
 }
 
 window.addEventListener('DOMContentLoaded', () => {
     main().catch((err) => {
         console.error(err);
-        if (loadingEl) loadingEl.textContent = 'Erro ao carregar os dados — veja o console.';
+        if (loadingEl) loadingEl.textContent = 'Erro ao carregar os dados';
     });
 });
