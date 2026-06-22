@@ -25,11 +25,19 @@ export function createDetailMap(selector, { onSelect } = {}) {
         tip.style('opacity', 1)
             .style('left', `${event.clientX - rect.left + 14}px`)
             .style('top', `${event.clientY - rect.top + 10}px`)
-            .html(
-                `<strong>${d.name ?? 'Sem nome'}</strong><br>` +
-                `${d.neighbourhood ?? ''}<br>` +
-                `US$ ${Math.round(d.price_usd ?? 0).toLocaleString('pt-BR')} · ${d.room_type ?? ''}`
-            );
+            .html(`
+                <div style="font-family: sans-serif; line-height: 1.4;">
+                    <strong style="font-size: 13px; color: var(--ink);">${d.name ?? 'Sem nome'}</strong><br>
+                    <span style="font-size: 11px; color: #666;">
+                        ${d.neighbourhood ?? '—'} • ${d.room_type ?? '—'}
+                    </span><br>
+                    <div style="margin-top: 6px; font-size: 12px;">
+                        <strong>Preço:</strong> US$ ${d.price_usd != null ? Math.round(d.price_usd) : '—'}<br>
+                        <strong>Nota:</strong> ${d.review_scores_rating != null ? `⭐ ${d.review_scores_rating}` : 'Sem nota'}<br>
+                        <strong>Reviews:</strong> ${d.number_of_reviews ?? 0} avaliações
+                    </div>
+                </div>
+            `);
     }
     
     function hideTooltip() {
