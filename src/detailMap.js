@@ -11,6 +11,7 @@ export function createDetailMap(selector, { onSelect } = {}) {
     const pointsG = g.append('g').attr('class', 'points');
     const highlightG = g.append('g').attr('class', 'highlight');
 
+    // Mensagem central quando não há pontos para mostrar
     const emptyMsg = svg.append('text')
         .attr('x', width / 2).attr('y', height / 2)
         .attr('text-anchor', 'middle')
@@ -118,6 +119,7 @@ export function createDetailMap(selector, { onSelect } = {}) {
         const ratingExtent = ratings.length ? d3.extent(ratings) : [0, 100];
         ratingColorScale.domain(ratingExtent);
 
+        // Atualiza as escalas de posição com base nos dados atuais
         x.domain(d3.extent(valid, (d) => +d.longitude)).range([40, width - 40]).nice();
         y.domain(d3.extent(valid, (d) => +d.latitude)).range([height - 30, 30]).nice(); 
 
@@ -125,6 +127,7 @@ export function createDetailMap(selector, { onSelect } = {}) {
 
         const selected = valid.find((d) => d.listing_id === selectedId);
 
+        // Atualiza os círculos dos pontos, aplicando cor e tamanho com base na avaliação e seleção
         const circles = pointsG.selectAll('circle').data(valid, (d) => d.listing_id);
         circles.exit().remove();
         circles.enter().append('circle')

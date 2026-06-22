@@ -11,6 +11,7 @@ const ROOM_COLORS = {
 
 // Cria o gráfico de histograma de preços, com barras empilhadas por tipo de quarto
 export function createHistogram(selector, { onBarClick } = {}) {
+    // Configurações iniciais do SVG e escalas
     const svg = d3.select(selector);
     const width = +svg.attr('width');
     const height = +svg.attr('height');
@@ -27,6 +28,7 @@ export function createHistogram(selector, { onBarClick } = {}) {
     const y = d3.scaleLinear().range([innerH, 0]);
     const stackGen = d3.stack().keys(ROOM_TYPES);
 
+    // Função auxiliar para pivotar os dados de entrada, transformando-os em um formato adequado para o gráfico empilhado
     function pivot(rows) {
         const byBin = new Map(PRICE_BINS.map((b) => [b.label, { bin_label: b.label }]));
         byBin.forEach((row) => ROOM_TYPES.forEach((rt) => (row[rt] = 0)));
@@ -37,11 +39,13 @@ export function createHistogram(selector, { onBarClick } = {}) {
         return Array.from(byBin.values());
     }
 
+    // Função para atualizar o histograma com novos dados, aplicando cores e tamanhos às barras com base na seleção
     function update(rows, activeBinLabel = null) {
         const pivoted = pivot(rows);
         const totals = pivoted.map((r) => ROOM_TYPES.reduce((s, rt) => s + r[rt], 0));
         y.domain([0, d3.max(totals) || 1]).nice();
 
+        // Atualiza os eixos X e Y com base nos dados atuais, aplicando rotação aos rótulos do eixo X para melhor legibilidade
         axisX.call(d3.axisBottom(x)).selectAll('text').attr('transform', 'rotate(-35)').style('text-anchor', 'end');
         axisY.call(d3.axisLeft(y).ticks(4));
 
@@ -54,6 +58,7 @@ export function createHistogram(selector, { onBarClick } = {}) {
 
         const rects = layersEnter.merge(layers).selectAll('rect').data((d) => d, (d) => d.data.bin_label);
 
+        // Aplica estilos de cor e tamanho às barras, destacando a barra ativa e desativando as demais
         rects
             .enter()
             .append('rect')

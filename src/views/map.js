@@ -59,6 +59,8 @@ export function createMap(selector, { onSelect, onBrush } = {}) {
     function hideTooltip() {
         tip.style('opacity', 0);
     }
+
+    // --- Células do grid, uma para cada cidade ---------------------------------
     const cells = CITY_ORDER.map((city, i) => {
         const col = i % GRID_COLS;
         const row = Math.floor(i / GRID_COLS);
@@ -153,7 +155,7 @@ export function createMap(selector, { onSelect, onBrush } = {}) {
 
             cell.x.domain(d3.extent(cellData, (d) => +d.longitude)).nice();
             cell.y.domain(d3.extent(cellData, (d) => +d.latitude)).nice();
-
+            
             cell.state.quadtree = d3.quadtree()
                 .x((d) => cell.x(+d.longitude))
                 .y((d) => cell.y(+d.latitude))
@@ -162,6 +164,7 @@ export function createMap(selector, { onSelect, onBrush } = {}) {
             const circles = cell.pointsG.selectAll('circle').data(cellData, (d) => d.listing_id);
             circles.exit().remove();
 
+            // Círculos de cada ponto, com cor baseada na avaliação e tamanho baseado na seleção
             circles
                 .enter()
                 .append('circle')
