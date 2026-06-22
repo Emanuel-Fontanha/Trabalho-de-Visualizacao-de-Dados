@@ -70,7 +70,7 @@ export function renderListing(container, listing, { onClose } = {}) {
             <p><strong>Tipo:</strong> ${listing.room_type ?? '—'} (${listing.property_type ?? '—'})</p>
             <p><strong>Estadia mínima:</strong> ${listing.minimum_nights ?? '—'} noites</p>
 
-           <h3>Avaliações ${listing.review_scores_rating != null ? `— ${listing.review_scores_rating.toFixed(0)}/100` : ''} <span style="font-size: 14px; font-weight: normal; color: #666;">(${listing.number_of_reviews ?? 0} reviews)</span></h3>
+           <h3>Avaliações ${listing.review_scores_rating != null ? `— ${listing.review_scores_rating.toFixed(0)}/100` : ''} <span style="font-size: 14px; font-weight: normal; color: #666;">(${listing.n_reviews ?? 0} reviews)</span></h3>
             <div class="scores">
                 ${scoreBar('Precisão', listing.review_scores_accuracy)}
                 ${scoreBar('Limpeza', listing.review_scores_cleanliness)}

@@ -51,7 +51,7 @@ export function createMap(selector, { onSelect, onBrush } = {}) {
                     <div style="margin-top: 6px; font-size: 12px;">
                         <strong>Preço:</strong> US$ ${d.price_usd != null ? Math.round(d.price_usd) : '—'}<br>
                         <strong>Nota:</strong> ${d.review_scores_rating != null ? `⭐ ${d.review_scores_rating}` : 'Sem nota'}<br>
-                        <strong>Reviews:</strong> ${d.number_of_reviews ?? 0} avaliações
+                        <strong>Reviews:</strong> ${d.n_reviews ?? 0} avaliações
                     </div>
                 </div>
             `);
