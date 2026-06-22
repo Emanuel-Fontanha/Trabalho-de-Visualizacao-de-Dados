@@ -96,18 +96,27 @@ export class DataLoader {
 
         await this.conn.query(`
             CREATE OR REPLACE VIEW listings_clean AS
+            
+            -- 1. Cria uma tabela temporária apenas com a contagem de reviews
+            WITH contagem_reviews AS (
+                SELECT TRY_CAST(listing_id AS BIGINT) AS listing_id, COUNT(*) AS total_reviews
+                FROM reviews_raw
+                GROUP BY TRY_CAST(listing_id AS BIGINT)
+            )
+            
+            -- 2. Seleciona os imóveis e junta com a contagem
             SELECT
-                listing_id,
-                name,
-                neighbourhood,
-                district,
-                city,
-                property_type,
-                room_type,
-                accommodates,
-                bedrooms,
-                TRY_CAST(REPLACE(REPLACE(CAST(price AS VARCHAR), '$', ''), ',', '') AS DOUBLE) AS price,
-                TRY_CAST(REPLACE(REPLACE(CAST(price AS VARCHAR), '$', ''), ',', '') AS DOUBLE) / CASE city
+                l.listing_id,
+                l.name,
+                l.neighbourhood,
+                l.district,
+                l.city,
+                l.property_type,
+                l.room_type,
+                l.accommodates,
+                l.bedrooms,
+                TRY_CAST(REPLACE(REPLACE(CAST(l.price AS VARCHAR), '$', ''), ',', '') AS DOUBLE) AS price,
+                TRY_CAST(REPLACE(REPLACE(CAST(l.price AS VARCHAR), '$', ''), ',', '') AS DOUBLE) / CASE l.city
                     WHEN 'Paris' THEN 0.825
                     WHEN 'Rome' THEN 0.825
                     WHEN 'New York' THEN 1.00
@@ -120,26 +129,31 @@ export class DataLoader {
                     WHEN 'Hong Kong' THEN 7.75
                     ELSE 1.00
                 END AS price_usd,
-                minimum_nights,
-                maximum_nights,
-                TRY_CAST(latitude AS DOUBLE) AS latitude,
-                TRY_CAST(longitude AS DOUBLE) AS longitude,
-                TRY_CAST(review_scores_rating AS DOUBLE) AS review_scores_rating,
-                TRY_CAST(review_scores_accuracy AS DOUBLE) AS review_scores_accuracy,
-                TRY_CAST(review_scores_cleanliness AS DOUBLE) AS review_scores_cleanliness,
-                TRY_CAST(review_scores_checkin AS DOUBLE) AS review_scores_checkin,
-                TRY_CAST(review_scores_communication AS DOUBLE) AS review_scores_communication,
-                TRY_CAST(review_scores_location AS DOUBLE) AS review_scores_location,
-                TRY_CAST(review_scores_value AS DOUBLE) AS review_scores_value,
-                host_id,
-                host_since,
-                host_is_superhost,
-                host_identity_verified,
-                instant_bookable
-            FROM listings_raw
-            WHERE TRY_CAST(latitude AS DOUBLE) IS NOT NULL
-              AND TRY_CAST(longitude AS DOUBLE) IS NOT NULL
-              AND TRY_CAST(REPLACE(REPLACE(CAST(price AS VARCHAR), '$', ''), ',', '') AS DOUBLE) IS NOT NULL;
+                l.minimum_nights,
+                l.maximum_nights,
+                TRY_CAST(l.latitude AS DOUBLE) AS latitude,
+                TRY_CAST(l.longitude AS DOUBLE) AS longitude,
+                TRY_CAST(l.review_scores_rating AS DOUBLE) AS review_scores_rating,
+                TRY_CAST(l.review_scores_accuracy AS DOUBLE) AS review_scores_accuracy,
+                TRY_CAST(l.review_scores_cleanliness AS DOUBLE) AS review_scores_cleanliness,
+                TRY_CAST(l.review_scores_checkin AS DOUBLE) AS review_scores_checkin,
+                TRY_CAST(l.review_scores_communication AS DOUBLE) AS review_scores_communication,
+                TRY_CAST(l.review_scores_location AS DOUBLE) AS review_scores_location,
+                TRY_CAST(l.review_scores_value AS DOUBLE) AS review_scores_value,
+                
+                -- Se não tiver avaliação na tabela temporária, retorna 0
+                COALESCE(r.total_reviews, 0) AS number_of_reviews,
+
+                l.host_id,
+                l.host_since,
+                l.host_is_superhost,
+                l.host_identity_verified,
+                l.instant_bookable
+            FROM listings_raw AS l
+            LEFT JOIN contagem_reviews AS r ON TRY_CAST(l.listing_id AS BIGINT) = r.listing_id
+            WHERE TRY_CAST(l.latitude AS DOUBLE) IS NOT NULL
+              AND TRY_CAST(l.longitude AS DOUBLE) IS NOT NULL
+              AND TRY_CAST(REPLACE(REPLACE(CAST(l.price AS VARCHAR), '$', ''), ',', '') AS DOUBLE) IS NOT NULL;
         `);
 
         await this.conn.query(`
@@ -152,21 +166,6 @@ export class DataLoader {
             WHERE TRY_CAST(listing_id AS BIGINT) IS NOT NULL;
         `);
     }
-
-    // *** REMOVIDO: fixEncoding() ***
-    // Existia uma função aqui que tentava corrigir "mojibake" usando
-    // decodeURIComponent(escape(str)) com fallback de cortar caracteres
-    // até parar de dar erro. O problema: escape()/decodeURIComponent()
-    // assumem Latin-1, não UTF-8 — qualquer string que já estivesse
-    // CORRETAMENTE acentuada em UTF-8 (que é o caso de toda a amostra
-    // gerada para este projeto, conferido diretamente nos CSVs) quebrava
-    // ao passar por essa função: "São Paulo" virava só "S", porque o
-    // primeiro caractere acentuado gerava um erro de "URI malformed", e
-    // o fallback ia cortando o FINAL da string até o erro parar de
-    // acontecer — o que, na prática, descartava quase tudo. Removida
-    // porque (1) os dados já estão corretos em UTF-8 nesta amostra, e
-    // (2) mesmo se não estivessem, essa técnica específica não era seguro
-    // o suficiente para aplicar indiscriminadamente em qualquer string.
 
     // Executa SQL arbitrário e devolve um array de objetos JS simples.
     async query(sql) {
@@ -196,7 +195,7 @@ export class DataLoader {
     });
     const sql = `
         SELECT listing_id, name, city, neighbourhood, room_type, property_type,
-               latitude, longitude, price, price_usd, review_scores_rating
+               latitude, longitude, price, price_usd, review_scores_rating, number_of_reviews
         FROM (
             SELECT *, ROW_NUMBER() OVER (PARTITION BY city ORDER BY random()) AS rn
             FROM listings_clean AS l
@@ -301,34 +300,14 @@ export class DataLoader {
         return rows[0] || null;
     }
 
-    // Mapa de detalhe com os listings da MESMA cidade, respeitando os
-    // filtros globais ativos — EXCETO para o próprio imóvel selecionado,
-    // que sempre aparece mesmo se estiver fora do filtro atual (ex.: o
-    // usuário aplicou um filtro de preço depois de já ter selecionado um
-    // imóvel fora dessa faixa) — caso contrário o painel de detalhe
-    // "perderia" o imóvel que o usuário está olhando.
-    //
-    // *** CLAREZA DE PRECEDÊNCIA SQL: os parênteses ao redor de cada
-    // bloco abaixo são explícitos de propósito. Sem eles, "A AND B OR C"
-    // ainda seria interpretado como "(A AND B) OR C" pela precedência
-    // padrão de SQL (AND liga mais forte que OR) — ou seja, o
-    // comportamento já seria o mesmo mesmo sem os parênteses. Mas deixar
-    // implícito é uma armadilha de manutenção: qualquer pessoa que
-    // adicionar uma nova condição aqui no futuro, sem prestar atenção à
-    // precedência, pode facilmente introduzir um bug real. ***
     async listingsInCity(city, filters = {}, selectedListingId = null) {
         const baseWhere = buildWhereClause({ ...filters, cities: [city] });
         const selectedId = selectedListingId != null ? Number(selectedListingId) : null;
-        // o próprio imóvel selecionado entra na amostra mesmo sem
-        // coordenadas válidas (ex.: caso raro de lat/lon nulos) — mas
-        // detailMap.js já filtra `longitude/latitude != null` antes de
-        // desenhar, então isso não quebra o desenho, só evita que a
-        // query e o painel "percam" o imóvel por completo.
         const selectedClause = selectedId != null ? ` OR l.listing_id = ${selectedId}` : '';
 
         const sql = `
             SELECT listing_id, name, city, neighbourhood, room_type, property_type,
-                   latitude, longitude, price_usd, review_scores_rating
+                   latitude, longitude, price_usd, review_scores_rating, number_of_reviews
             FROM (
                 SELECT *, ROW_NUMBER() OVER (ORDER BY random()) AS rn
                 FROM listings_clean AS l
