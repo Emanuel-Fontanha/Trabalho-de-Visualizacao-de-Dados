@@ -9,23 +9,19 @@ import * as d3 from 'd3';
 
 const loader = new DataLoader();
 
+// Seletores do Slider de Rating
+const ratingMinEl = document.querySelector('#rating-min');
+const ratingMaxEl = document.querySelector('#rating-max');
+const lblMin = document.querySelector('#lbl-rating-min');
+const lblMax = document.querySelector('#lbl-rating-max');
+
 const detailsEl = document.querySelector('#details');
 const statusEl = document.querySelector('#filter-status');
 const loadingEl = document.querySelector('#loading');
 const clearBtn = document.querySelector('#clear-filters');
-// *** NOVO: elemento que mostra "N filtros ativos" ao lado do botão de
-// limpar — ver showClearFeedback()/updateActiveFilterCount() abaixo.
 const activeFilterCountEl = document.querySelector('#active-filter-count');
-// *** NOVO: filtro de cidade (where) — pedido explícito do enunciado do
-// trabalho ("filtro por região"). #city-filter é uma div vazia no HTML;
-// os chips são criados dinamicamente em buildCityChips(), depois que
-// loader.listCities() traz as cidades realmente presentes na amostra.
 const cityFilterEl = document.querySelector('#city-filter');
 
-// --- Views --------------------------------------------------------------
-// Cada view só conhece seu próprio SVG e os callbacks que dispara — toda a
-// coordenação entre elas passa pelo state.js (nenhuma view chama a outra
-// diretamente).
 const mapView = createMap('#map', {
     onSelect: (d) => setSelection(d.listing_id),
     onBrush: (bbox) => updateFilters({ bbox }),
@@ -47,21 +43,11 @@ const histogramView = createHistogram('#histogram-chart', {
     },
 });
 
-// *** NOVO: mapa de detalhe (zoom/pan) do imóvel selecionado — ver
-// src/detailMap.js. Diferente das outras views, não recebe dados a
-// cada renderAll(); é atualizado separadamente em updateDetailMap(),
-// chamado só quando `selection` muda (ver final de renderAll), porque
-// os dados que ele usa (listingsInCity) não dependem dos filtros
-// ativos — refazer essa consulta a cada filtro mudado seria
-// desperdício, já que o resultado seria sempre o mesmo enquanto a
-// seleção não mudar.
 const detailMapView = createDetailMap('#detail-map', {
     onSelect: (d) => setSelection(d.listing_id)
 });
 let lastDetailMapListingId = null; // evita recentralizar o zoom em todo re-render do MESMO imóvel
 
-// Acha o bin ativo (se houver) a partir do filtro de preço corrente, só
-// para destacar a barra correspondente no histograma.
 function activeBinLabel(filters) {
     if (!filters.priceRange) return null;
     const [min, max] = filters.priceRange;
@@ -69,18 +55,6 @@ function activeBinLabel(filters) {
     return bin ? bin.label : null;
 }
 
-// *** NOVO: monta os chips de filtro de cidade (where), um por cidade
-// presente na amostra. Clicar faz toggle (seleciona/deseleciona); nenhuma
-// cidade marcada = sem filtro = todas as 10. Reaproveita o mesmo
-// updateFilters() de qualquer outra view — o chip de cidade não é
-// estruturalmente diferente de um brush ou de um clique de barra, é só
-// outra fonte de mudança de estado.
-//
-// `selected` vive fora de buildCityChips (em vez de dentro dela) só para
-// que clearCityChips() consiga limpá-lo também — se ficasse só no closure
-// da função, "Limpar filtros" resetaria a aparência dos chips mas o Set
-// continuaria com as cidades antigas, e o próximo clique do usuário
-// removeria (em vez de adicionar) a cidade clicada.
 const selectedCities = new Set();
 function buildCityChips(cities) {
     if (!cityFilterEl) return;
@@ -108,15 +82,6 @@ function clearCityChips() {
     cityFilterEl?.querySelectorAll('.city-chip.active').forEach((el) => el.classList.remove('active'));
 }
 
-// *** NOVO: feedback visual do botão "Limpar filtros" ***
-// O botão, sozinho, não dizia nada sobre o que aconteceu ao ser clicado
-// (nenhuma mudança de texto/cor) — o usuário só percebia o efeito
-// indiretamente, vendo os gráficos mudarem. Duas coisas resolvem isso:
-//  1. clique no botão troca o texto por "✓ Filtros limpos" por 1,1s;
-//  2. um contador ("3 filtros ativos") aparece ao lado do botão sempre
-//     que algum filtro estiver aplicado, e desaparece quando não há
-//     nenhum — assim dá pra perceber a limpeza mesmo sem prestar atenção
-//     exatamente no instante do clique.
 const clearBtnDefaultText = clearBtn ? clearBtn.textContent : '';
 let clearFeedbackTimeout = null;
 
@@ -131,16 +96,13 @@ function showClearFeedback() {
     }, 1100);
 }
 
-// Conta quantos filtros estão ativos no momento (cada chave não-nula em
-// state.filters conta 1, exceto cities, que conta só se tiver alguma
-// cidade marcada) — usado só para o contador ao lado do botão, não afeta
-// nenhuma consulta.
 function countActiveFilters(filters) {
     let n = 0;
     if (filters.cities && filters.cities.length > 0) n++;
     if (filters.priceRange) n++;
     if (filters.bbox) n++;
     if (filters.dateRange) n++;
+    if (filters.ratingRange) n++; // Incluído o filtro de avaliação na contagem!
     return n;
 }
 
@@ -189,7 +151,7 @@ async function renderAll(state) {
         if (myRequest !== requestId) return;
         renderListing(detailsEl, listing, { onClose: () => setSelection(null) });
         
-        // Adicione a variável 'filters' aqui no meio:
+        // Repassa o 'filters' para o mapa de detalhe
         await updateDetailMap(listing, filters, myRequest); 
     } else {
         renderOverview(detailsEl, { summary, neighbourhoods });
@@ -204,8 +166,6 @@ async function updateDetailMap(listing, filters, myRequest) {
         return;
     }
     
-    // Repasse o 'filters' e garanta que o imóvel selecionado sempre seja
-    // incluído na amostra do mapa de detalhe.
     const cityPoints = await loader.listingsInCity(listing.city, filters, listing.listing_id);
     
     if (myRequest !== requestId) return;
@@ -214,10 +174,58 @@ async function updateDetailMap(listing, filters, myRequest) {
     lastDetailMapListingId = listing.listing_id;
 }
 
+// --- LÓGICA DOS SLIDERS DE RATING ---
+
+function handleRatingChange() {
+    const minVal = Number(ratingMinEl.value);
+    const maxVal = Number(ratingMaxEl.value);
+    
+    // Proteção: não deixa o mínimo ser maior que o máximo
+    if (minVal > maxVal) {
+        if (this.id === 'rating-min') {
+            ratingMaxEl.value = minVal;
+            if (lblMax) lblMax.textContent = minVal;
+        } else {
+            ratingMinEl.value = maxVal;
+            if (lblMin) lblMin.textContent = maxVal;
+        }
+    }
+
+    const finalMin = Number(ratingMinEl.value);
+    const finalMax = Number(ratingMaxEl.value);
+
+    // Atualiza o estado global
+    updateFilters({ ratingRange: [finalMin, finalMax] });
+}
+
+// Atualiza o texto em tempo real ao arrastar
+ratingMinEl?.addEventListener('input', () => {
+    if (lblMin) lblMin.textContent = ratingMinEl.value;
+});
+ratingMaxEl?.addEventListener('input', () => {
+    if (lblMax) lblMax.textContent = ratingMaxEl.value;
+});
+
+// Executa o filtro no banco ao soltar o clique
+ratingMinEl?.addEventListener('change', handleRatingChange);
+ratingMaxEl?.addEventListener('change', handleRatingChange);
+
+// --- LÓGICA DO BOTÃO LIMPAR FILTROS ---
 clearBtn?.addEventListener('click', () => {
     mapView.clearBrush();
     timelineView.clearBrush();
     clearCityChips();
+    
+    // Reseta os valores numéricos e os rótulos dos sliders
+    if (ratingMinEl) { 
+        ratingMinEl.value = 0; 
+        if (lblMin) lblMin.textContent = '0'; 
+    }
+    if (ratingMaxEl) { 
+        ratingMaxEl.value = 100; 
+        if (lblMax) lblMax.textContent = '100'; 
+    }
+    
     clearFilters();
     showClearFeedback();
 });

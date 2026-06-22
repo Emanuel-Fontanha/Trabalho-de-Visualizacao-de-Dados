@@ -67,6 +67,11 @@ export function buildWhereClause(filters = {}) {
         )`);
     }
 
+    if (filters.ratingRange) {
+        const [min, max] = filters.ratingRange;
+        clauses.push(`l.review_scores_rating BETWEEN ${Number(min)} AND ${Number(max)}`);
+    }
+
     return clauses.join(' AND ');
 }
 
@@ -229,19 +234,24 @@ export class DataLoader {
     // --- Consultas usadas pelas views coordenadas -------------------------
 
     async listingsForMap(filters = {}) {
-        const where = buildWhereClause({ cities: filters.cities, priceRange: filters.priceRange, dateRange: filters.dateRange });
-        const sql = `
-            SELECT listing_id, name, city, neighbourhood, room_type, property_type,
-                   latitude, longitude, price, price_usd, review_scores_rating
-            FROM (
-                SELECT *, ROW_NUMBER() OVER (PARTITION BY city ORDER BY n_reviews DESC) AS rn
-                FROM listings_clean AS l
-                WHERE ${where}
-            ) AS sampled
-            WHERE rn <= ${MAX_MAP_POINTS_PER_CITY};
-        `;
-        return this.query(sql);
-    }
+    const where = buildWhereClause({ 
+        cities: filters.cities, 
+        priceRange: filters.priceRange, 
+        dateRange: filters.dateRange,
+        ratingRange: filters.ratingRange
+    });
+    const sql = `
+        SELECT listing_id, name, city, neighbourhood, room_type, property_type,
+               latitude, longitude, price, price_usd, review_scores_rating
+        FROM (
+            SELECT *, ROW_NUMBER() OVER (PARTITION BY city ORDER BY n_reviews DESC) AS rn
+            FROM listings_clean AS l
+            WHERE ${where}
+        ) AS sampled
+        WHERE rn <= ${MAX_MAP_POINTS_PER_CITY};
+    `;
+    return this.query(sql);
+}
 
     async listingsInCity(city, filters = {}, selectedListingId = null) {
         const baseWhere = buildWhereClause({ ...filters, cities: [city] });
@@ -268,7 +278,11 @@ export class DataLoader {
     }
 
     async priceHistogram(filters = {}) {
-        const where = buildWhereClause({ cities: filters.cities, bbox: filters.bbox, dateRange: filters.dateRange });
+        const where = buildWhereClause({ 
+            cities: filters.cities, 
+            bbox: filters.bbox, 
+            dateRange: filters.dateRange,
+            ratingRange: filters.ratingRange});
         const caseLines = PRICE_BINS.map((b) =>
             b.max === Infinity
                 ? `WHEN l.price_usd >= ${b.min} THEN '${b.label}'`
@@ -290,17 +304,22 @@ export class DataLoader {
     }
 
     async reviewsTimeSeries(filters = {}) {
-        const where = buildWhereClause({ cities: filters.cities, priceRange: filters.priceRange, bbox: filters.bbox });
-        const sql = `
-            SELECT strftime(r.date_parsed, '%Y-%m') AS month, COUNT(*) AS n_reviews
-            FROM reviews_clean AS r
-            JOIN listings_clean AS l ON l.listing_id = r.listing_id
-            WHERE r.date_parsed IS NOT NULL AND ${where}
-            GROUP BY month
-            ORDER BY month;
-        `;
-        return this.query(sql);
-    }
+    const where = buildWhereClause({ 
+        cities: filters.cities, 
+        priceRange: filters.priceRange, 
+        bbox: filters.bbox,
+        ratingRange: filters.ratingRange
+    });
+    const sql = `
+        SELECT strftime(r.date_parsed, '%Y-%m') AS month, COUNT(*) AS n_reviews
+        FROM reviews_clean AS r
+        JOIN listings_clean AS l ON l.listing_id = r.listing_id
+        WHERE r.date_parsed IS NOT NULL AND ${where}
+        GROUP BY month
+        ORDER BY month;
+    `;
+    return this.query(sql);
+}
 
     async summaryStats(filters = {}) {
         const where = buildWhereClause(filters);
