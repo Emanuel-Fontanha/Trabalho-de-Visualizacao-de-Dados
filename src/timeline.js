@@ -1,12 +1,5 @@
 import * as d3 from 'd3';
-
-// --- FUNÇÃO PARA CRIAR A TIMELINE ---
-
-// A timeline é um gráfico de área/linha que mostra a quantidade de reviews por mês.
-// Permite selecionar um intervalo de datas (brush) e aplicar um filtro global.
-// Também permite zoom visual para o intervalo selecionado, com botão de reset.
 export function createTimeline(selector, { onBrush, onZoomChange } = {}) {
-    // Configurações iniciais do SVG e escalas
     const svg = d3.select(selector);
     const width = +svg.attr('width');
     const height = +svg.attr('height');
@@ -32,7 +25,7 @@ export function createTimeline(selector, { onBrush, onZoomChange } = {}) {
     const y = d3.scaleLinear().range([innerH, 0]);
     const parseMonth = d3.timeParse('%Y-%m');
 
-    // Gera a área e a linha do gráfico, com interpolação suave
+    // Gera a área e a linha do gráfico, com interpolação
     const area = d3.area()
         .x((d) => x(d.date))
         .y0(innerH)
@@ -84,8 +77,8 @@ export function createTimeline(selector, { onBrush, onZoomChange } = {}) {
         .style('display', 'none');
     const formatPeriod = d3.timeFormat('%b %Y');
 
-    let lastData = [];      // série completa, como veio da última chamada a update()
-    let fullDomain = null;   // [minDate, maxDate] do dataset inteiro — para onde o zoom out volta
+    let lastData = [];      
+    let fullDomain = null;   // [minDate, maxDate] do dataset inteiro para onde o zoom out volta
     let zoomDomain = null;   // [minDate, maxDate] do zoom atual, ou null se não há zoom
 
     // Retorna um domínio [start, end] arredondado para o mês mais próximo
@@ -93,20 +86,20 @@ export function createTimeline(selector, { onBrush, onZoomChange } = {}) {
         return [d3.timeMonth.floor(start), d3.timeMonth.ceil(end)];
     }
 
-    // Função chamada continuamente enquanto o usuário arrasta o brush — mostra o rótulo do período selecionado
+    // Função chamada continuamente enquanto o usuário arrasta o brush mostra o rótulo do período selecionado
     function brushing(event) {
         if (!event.sourceEvent || !event.selection) return;
         const [start, end] = event.selection.map(x.invert);
         showPeriodLabel(start, end);
     }
 
-    // Função chamada quando o brush é finalizado (ao soltar o mouse) — aplica o filtro global e o zoom visual
+    // Função chamada quando o brush é finalizado (ao soltar o mouse) aplica o filtro global e o zoom visual
     function brushed(event) {
         if (!event.sourceEvent) return;
 
         const sel = event.selection;
         if (!sel) {
-            if (onBrush) onBrush(null); // brush limpo -> remove o filtro "when"
+            if (onBrush) onBrush(null); // brush limpo, remove o filtro "when"
             return;
         }
         const [rawStart, rawEnd] = sel.map(x.invert);

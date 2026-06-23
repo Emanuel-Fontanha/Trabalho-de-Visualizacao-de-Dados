@@ -1,8 +1,7 @@
 import { loadDb } from './config.js';
 
-// Faixas de preço fixas usadas no histograma, EM USD (ver price_usd em
-// listings_clean). Ficam fixas (em vez de recalculadas a cada filtro) para
-// que o eixo X do histograma não "pule" quando o usuário aplica um filtro —
+// Faixas de preço fixas usadas no histograma, EM USD. Ficam fixas (em vez de recalculadas a cada filtro) para
+// que o eixo X do histograma não "pule" quando o usuário aplica um filtro
 // só a altura das barras muda.
 export const PRICE_BINS = [
     { min: 0, max: 25, label: '0–25' },
@@ -16,8 +15,8 @@ export const PRICE_BINS = [
     { min: 700, max: Infinity, label: '700+' },
 ];
 
-/* Limite de VOLUME DE DADOS: quantos imóveis por cidade ficam no banco depois da carga. 
-   Diferente dos limites de RENDERIZAÇÃO abaixo — este roda uma vez só, no loadAirbnb(). */
+/* quantos imóveis por cidade ficam no banco depois da carga. 
+   Diferente dos limites de RENDERIZAÇÃO abaixo, este roda uma vez só, no loadAirbnb(). */
 export const DATA_LOAD_CAP_PER_CITY = 1000;
 // Monta a cláusula WHERE compartilhada por (quase) todas as consultas, a
 // partir do objeto de filtros guardado em state.js.
@@ -84,7 +83,7 @@ export class DataLoader {
         // Os CSVs do Inside Airbnb costumam vir em Windows-1252, não UTF-8
         // puro. Decodificar aqui evita o erro "Invalid unicode (byte
         // sequence mismatch)" que o DuckDB lança ao ler os bytes brutos
-        // como UTF-8.
+        // como UTF-8
         const decoder = new TextDecoder('windows-1252');
         const text1 = decoder.decode(buf1);
         const text2 = decoder.decode(buf2);
@@ -206,9 +205,6 @@ export class DataLoader {
         });
     }
 
-    // --- Consultas usadas pelas views coordenadas -------------------------
-
-    // Limita o número de pontos por cidade (ver DATA_LOAD_CAP_PER_CITY) 
     async listingsForMap(filters = {}) {
         const where = buildWhereClause({ 
             cities: filters.cities, 

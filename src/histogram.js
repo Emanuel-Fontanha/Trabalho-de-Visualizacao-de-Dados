@@ -3,15 +3,14 @@ import { PRICE_BINS } from './data.js';
 
 const ROOM_TYPES = ['Entire place', 'Private room', 'Shared room', 'Hotel room'];
 const ROOM_COLORS = {
-    'Entire place': '#2F9E96', // accent-teal
-    'Private room': '#E8714A', // accent-coral
-    'Shared room': '#D9A86C', // accent-sand
-    'Hotel room': '#7A98A0', // tom neutro, categoria rara na amostra
+    'Entire place': '#2F9E96',
+    'Private room': '#E8714A', 
+    'Shared room': '#D9A86C', 
+    'Hotel room': '#7A98A0', 
 };
 
 // Cria o gráfico de histograma de preços, com barras empilhadas por tipo de quarto
 export function createHistogram(selector, { onBarClick } = {}) {
-    // Configurações iniciais do SVG e escalas
     const svg = d3.select(selector);
     const width = +svg.attr('width');
     const height = +svg.attr('height');
@@ -28,7 +27,7 @@ export function createHistogram(selector, { onBarClick } = {}) {
     const y = d3.scaleLinear().range([innerH, 0]);
     const stackGen = d3.stack().keys(ROOM_TYPES);
 
-    // Função auxiliar para pivotar os dados de entrada, transformando-os em um formato adequado para o gráfico empilhado
+    // Função para tratar os dados de entrada, transformando-os em um formato adequado para o gráfico empilhado
     function pivot(rows) {
         const byBin = new Map(PRICE_BINS.map((b) => [b.label, { bin_label: b.label }]));
         byBin.forEach((row) => ROOM_TYPES.forEach((rt) => (row[rt] = 0)));
@@ -58,7 +57,6 @@ export function createHistogram(selector, { onBarClick } = {}) {
 
         const rects = layersEnter.merge(layers).selectAll('rect').data((d) => d, (d) => d.data.bin_label);
 
-        // Aplica estilos de cor e tamanho às barras, destacando a barra ativa e desativando as demais
         rects
             .enter()
             .append('rect')

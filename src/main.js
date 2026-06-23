@@ -22,7 +22,7 @@ const clearBtn = document.querySelector('#clear-filters');
 const activeFilterCountEl = document.querySelector('#active-filter-count');
 const cityFilterEl = document.querySelector('#city-filter');
 
-/// --- CRIAÇÃO DAS VIEWS ---
+/// views abaixo
 
 /// Cria o mapa principal, com pontos e brush
 const mapView = createMap('#map', {
@@ -64,7 +64,6 @@ function activeBinLabel(filters) {
 
 const selectedCities = new Set();
 
-// --- FUNÇÕES AUXILIARES DE INTERAÇÃO COM FILTROS ---
 
 // Constrói os chips de cidade com base na lista de cidades e no número de imóveis em cada uma
 function buildCityChips(cities) {
@@ -192,7 +191,7 @@ async function updateDetailMap(listing, filters, myRequest) {
     lastDetailMapListingId = listing.listing_id;
 }
 
-// --- LÓGICA DOS SLIDERS DE RATING ---
+// slider de rating
 
 // Atualiza o filtro de avaliação com base nos valores dos sliders, garantindo que o mínimo não seja maior que o máximo
 function handleRatingChange() {
@@ -229,7 +228,6 @@ ratingMaxEl?.addEventListener('input', () => {
 ratingMinEl?.addEventListener('change', handleRatingChange);
 ratingMaxEl?.addEventListener('change', handleRatingChange);
 
-// --- LÓGICA DO BOTÃO LIMPAR FILTROS ---
 
 // Limpa todos os filtros, incluindo sliders, chips de cidade e brushes, e mostra um feedback visual temporário
 clearBtn?.addEventListener('click', () => {
@@ -251,7 +249,6 @@ clearBtn?.addEventListener('click', () => {
     showClearFeedback();
 });
 
-// --- FUNÇÃO PRINCIPAL DE INICIALIZAÇÃO ---
 async function main() {
     // Inicializa a aplicação, carrega os dados e renderiza todas as views
     subscribe(renderAll);
@@ -274,7 +271,7 @@ async function main() {
     window.loader = loader;
 }
 
-// --- INICIALIZAÇÃO AO CARREGAR A PÁGINA ---
+// inicializacao
 
 // Adiciona um listener para o evento DOMContentLoaded, que chama a função main() quando a página estiver pronta
 window.addEventListener('DOMContentLoaded', () => {

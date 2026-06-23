@@ -21,8 +21,6 @@ export function createDetailMap(selector, { onSelect } = {}) {
     const panel = svg.node().closest('.panel') || svg.node().parentNode;
     const tip = d3.select(panel).append('div').attr('class', 'tooltip').style('opacity', 0);
 
-
-    // --- Funções auxiliares para tooltip ---------------------------------
     // Mostra tooltip com detalhes do imóvel
     function showTooltip(d, event) {
         if (!d) return hideTooltip();
@@ -95,10 +93,10 @@ export function createDetailMap(selector, { onSelect } = {}) {
             .attr('stroke-width', 1.5);
     }
 
-    // *** AQUI: Mesma escala de cor de avaliação (verde/laranja) do mapa principal ***
+    // Mesma escala de cor de avaliação (verde/laranja) do mapa principal
     const ratingColorScale = d3.scaleSequential((t) => d3.interpolateHcl('#1f6e72', '#e8714a')(t));
 
-    // Atualiza os pontos no mapa de detalhe, com base nos dados filtrados (chamado pelo main.js)
+    // Atualiza os pontos no mapa de detalhe, com base nos dados filtrados
     function update(points, selectedId, recenter) {
         const valid = (points || []).filter((d) => d.longitude != null && d.latitude != null);
 

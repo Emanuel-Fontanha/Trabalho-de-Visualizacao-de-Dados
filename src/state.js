@@ -1,14 +1,14 @@
 const initialFilters = {
-    cities: null, // string[] | null  -> dimensão "where" (cidades selecionadas; null/[] = todas as 10)
-    priceRange: null, // [min, max] em USD (ver price_usd em data.js)  -> dimensão "what"
-    bbox: null, // {city, bbox:{lonMin, lonMax, latMin, latMax}} -> dimensão "where" (região dentro de 1 cidade)
-    dateRange: null, // [isoStart, isoEnd] -> dimensão "when"
-    ratingRange: null, // [min, max] -> dimensão "how" (avaliação média do imóvel)
+    cities: null,
+    priceRange: null,
+    bbox: null,
+    dateRange: null, 
+    ratingRange: null, 
 };
 
 const state = {
     filters: { ...initialFilters },
-    selection: null, // listing_id selecionado no mapa (details on demand)
+    selection: null,
 };
 
 const listeners = new Set();
@@ -29,9 +29,9 @@ export function setState(patch) {
     notify();
 }
 
-// Faz merge raso em filters (preserva os outros filtros já ativos) — assim
+// Faz merge raso em filters (preserva os outros filtros já ativos)
 // cada view só precisa informar o filtro que ela mesma controla, sem se
-// preocupar em repetir os filtros das outras.
+// preocupar em repetir os filtros das outras
 export function updateFilters(patch) {
     state.filters = { ...state.filters, ...patch };
     notify();
